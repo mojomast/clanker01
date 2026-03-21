@@ -12,7 +12,7 @@ import (
 
 func TestNewRecoveryManager(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	scheduler := NewScheduler(nil, taskQueue, nil)
+	scheduler := NewScheduler(nil, taskQueue, nil, nil)
 
 	rm := NewRecoveryManager(nil, scheduler, nil)
 
@@ -24,7 +24,7 @@ func TestNewRecoveryManager(t *testing.T) {
 
 func TestRecoveryManager_WithCustomConfig(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	scheduler := NewScheduler(nil, taskQueue, nil)
+	scheduler := NewScheduler(nil, taskQueue, nil, nil)
 
 	cfg := &RecoveryConfig{
 		MaxRetries:   5,
@@ -110,7 +110,7 @@ func TestIsComplexityError(t *testing.T) {
 
 func TestRecoveryManager_DetermineStrategy(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	scheduler := NewScheduler(nil, taskQueue, nil)
+	scheduler := NewScheduler(nil, taskQueue, nil, nil)
 	rm := NewRecoveryManager(nil, scheduler, nil)
 
 	strategy := rm.determineStrategy(errors.New("request timeout"))
@@ -128,7 +128,7 @@ func TestRecoveryManager_DetermineStrategy(t *testing.T) {
 
 func TestRecoveryManager_RetryTask(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	scheduler := NewScheduler(nil, taskQueue, nil)
+	scheduler := NewScheduler(nil, taskQueue, nil, nil)
 
 	orch := &Orchestrator{
 		taskQueue:   taskQueue,
@@ -139,13 +139,13 @@ func TestRecoveryManager_RetryTask(t *testing.T) {
 	rm := NewRecoveryManager(orch, scheduler, nil)
 
 	task := &api.Task{
-		ID:          "task-1",
-		Priority:    10,
-		Prompt:      "Test task",
-		MaxRetries:  3,
-		RetryCount:  0,
-		Status:      api.TaskStatusFailed,
-		Error:       errors.New("temporary failure"),
+		ID:         "task-1",
+		Priority:   10,
+		Prompt:     "Test task",
+		MaxRetries: 3,
+		RetryCount: 0,
+		Status:     api.TaskStatusFailed,
+		Error:      errors.New("temporary failure"),
 	}
 
 	taskQueue.Enqueue(nil, task)
@@ -155,4 +155,3 @@ func TestRecoveryManager_RetryTask(t *testing.T) {
 	assert.Equal(t, 1, task.RetryCount)
 	assert.Equal(t, api.TaskStatusQueued, task.Status)
 }
-

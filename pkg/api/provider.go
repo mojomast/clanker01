@@ -162,6 +162,14 @@ type ChatStreamEvent struct {
 
 type StreamEventType string
 
+const (
+	StreamEventStart    StreamEventType = "start"
+	StreamEventDelta    StreamEventType = "delta"
+	StreamEventToolCall StreamEventType = "tool_call"
+	StreamEventError    StreamEventType = "error"
+	StreamEventDone     StreamEventType = "done"
+)
+
 // TODO: MessageDelta, ToolCallDelta, and FunctionCallDelta are part of the streaming
 // API contract. They are not yet populated by providers but should be kept for when
 // streaming support is fully implemented.

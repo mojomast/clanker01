@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/swarm-ai/swarm/internal/config"
 	"github.com/swarm-ai/swarm/pkg/api"
 )
 
@@ -817,47 +819,194 @@ func (s *Server) handleListSkillTools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	response := &ConfigResponse{
-		Version: s.appConfig.Version,
-		Project: map[string]interface{}{
-			"name": s.appConfig.Project.Name,
-			"root": s.appConfig.Project.Root,
-		},
-		LLM: map[string]interface{}{
-			"default_provider": s.appConfig.LLM.DefaultProvider,
-			"default_model":    s.appConfig.LLM.DefaultModel,
-			"providers":        s.appConfig.LLM.Providers,
-		},
-		Agents: map[string]interface{}{
-			"defaults": s.appConfig.Agents.Defaults,
-			"roles":    s.appConfig.Agents.Roles,
-		},
-		Skills: map[string]interface{}{
-			"builtin":  s.appConfig.Skills.Builtin,
-			"external": s.appConfig.Skills.External,
-		},
-		Server: map[string]interface{}{
-			"enabled": s.appConfig.Server.Enabled,
-			"grpc":    s.appConfig.Server.GRPC,
-			"http":    s.appConfig.Server.HTTP,
-			"auth": map[string]interface{}{
-				"enabled": s.appConfig.Server.Auth.Enabled,
-			},
-		},
-		Security: map[string]interface{}{
-			"sandbox": s.appConfig.Security.Sandbox,
-			"audit":   s.appConfig.Security.Audit,
-			"secrets": s.appConfig.Security.Secrets,
-		},
-	}
-
-	s.respondJSON(w, http.StatusOK, response)
+	cfg := s.getConfig()
+	redacted := redactConfig(cfg)
+	s.respondJSON(w, http.StatusOK, redacted)
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
-	s.respondError(w, http.StatusNotImplemented, "config updates not yet implemented", nil)
+	if s.configMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "config manager not available", nil)
+		return
+	}
+
+	// Decode partial update from request body into a generic map first
+	var patch map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	// Apply changes via the config manager's transactional Update
+	if err := s.configMgr.Update(func(cfg *config.Config) error {
+		// Re-serialize the current config to JSON, merge the patch, then
+		// deserialize back. This supports partial updates without requiring
+		// the client to send the full config.
+		current, err := json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to serialize current config: %w", err)
+		}
+
+		var merged map[string]json.RawMessage
+		if err := json.Unmarshal(current, &merged); err != nil {
+			return fmt.Errorf("failed to parse current config: %w", err)
+		}
+
+		for k, v := range patch {
+			merged[k] = v
+		}
+
+		mergedBytes, err := json.Marshal(merged)
+		if err != nil {
+			return fmt.Errorf("failed to serialize merged config: %w", err)
+		}
+
+		if err := json.Unmarshal(mergedBytes, cfg); err != nil {
+			return fmt.Errorf("failed to apply merged config: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		s.respondError(w, http.StatusBadRequest, "config update failed", err)
+		return
+	}
+
+	// Persist the updated config to disk (best-effort; report errors)
+	if err := s.configMgr.Save(); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "config updated in memory but failed to persist", err)
+		return
+	}
+
+	// Return the updated (redacted) config
+	cfg := s.configMgr.Get()
+	redacted := redactConfig(cfg)
+	s.respondJSON(w, http.StatusOK, redacted)
 }
 
 func (s *Server) handleValidateConfig(w http.ResponseWriter, r *http.Request) {
-	s.respondError(w, http.StatusNotImplemented, "config validation not yet implemented", nil)
+	var cfg config.Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	result := config.ValidateWithResult(&cfg)
+
+	// Build a serializable response
+	type validationErrorResp struct {
+		Field   string      `json:"field"`
+		Message string      `json:"message"`
+		Value   interface{} `json:"value,omitempty"`
+	}
+
+	errors := make([]validationErrorResp, 0, len(result.Errors))
+	for _, e := range result.Errors {
+		errors = append(errors, validationErrorResp{
+			Field:   e.Field,
+			Message: e.Message,
+			Value:   e.Value,
+		})
+	}
+
+	resp := map[string]interface{}{
+		"valid":    result.Valid,
+		"errors":   errors,
+		"warnings": result.Warnings,
+	}
+
+	status := http.StatusOK
+	if !result.Valid {
+		status = http.StatusUnprocessableEntity
+	}
+	s.respondJSON(w, status, resp)
+}
+
+func (s *Server) handleGetConfigSchema(w http.ResponseWriter, r *http.Request) {
+	s.respondJSON(w, http.StatusOK, configSchemaDefinition)
+}
+
+// redactConfig creates a ConfigResponse with sensitive values masked.
+func redactConfig(cfg *config.Config) *ConfigResponse {
+	// Build providers map with redacted API keys
+	providers := make(map[string]interface{})
+	for name, p := range cfg.LLM.Providers {
+		apiKey := ""
+		if p.APIKey != "" {
+			apiKey = "****"
+		}
+		providers[name] = map[string]interface{}{
+			"api_key":  apiKey,
+			"base_url": p.BaseURL,
+			"models":   p.Models,
+			"options":  p.Options,
+		}
+	}
+
+	// Redact JWT secret
+	jwtSecret := ""
+	if cfg.Server.Auth.JWTSecret != "" {
+		jwtSecret = "****"
+	}
+
+	// Redact env vars containing sensitive keywords in MCP server configs
+	mcpServers := make(map[string]interface{})
+	for name, srv := range cfg.MCP.Servers {
+		env := make(map[string]string)
+		for k, v := range srv.Env {
+			upper := strings.ToUpper(k)
+			if strings.Contains(upper, "KEY") || strings.Contains(upper, "SECRET") ||
+				strings.Contains(upper, "TOKEN") || strings.Contains(upper, "PASSWORD") {
+				if v != "" {
+					env[k] = "****"
+				} else {
+					env[k] = ""
+				}
+			} else {
+				env[k] = v
+			}
+		}
+		mcpServers[name] = map[string]interface{}{
+			"type":    srv.Type,
+			"command": srv.Cmd,
+			"args":    srv.Args,
+			"env":     env,
+			"url":     srv.URL,
+		}
+	}
+
+	return &ConfigResponse{
+		Version: cfg.Version,
+		Project: map[string]interface{}{
+			"name": cfg.Project.Name,
+			"root": cfg.Project.Root,
+		},
+		LLM: map[string]interface{}{
+			"default_provider":    cfg.LLM.DefaultProvider,
+			"default_model":       cfg.LLM.DefaultModel,
+			"providers":           providers,
+			"agent_model_mapping": cfg.LLM.AgentModelMapping,
+		},
+		Agents: map[string]interface{}{
+			"defaults": cfg.Agents.Defaults,
+			"roles":    cfg.Agents.Roles,
+		},
+		Skills: map[string]interface{}{
+			"builtin":  cfg.Skills.Builtin,
+			"external": cfg.Skills.External,
+		},
+		Server: map[string]interface{}{
+			"enabled": cfg.Server.Enabled,
+			"grpc":    cfg.Server.GRPC,
+			"http":    cfg.Server.HTTP,
+			"auth": map[string]interface{}{
+				"enabled":    cfg.Server.Auth.Enabled,
+				"jwt_secret": jwtSecret,
+			},
+		},
+		Security: map[string]interface{}{
+			"sandbox": cfg.Security.Sandbox,
+			"audit":   cfg.Security.Audit,
+			"secrets": cfg.Security.Secrets,
+		},
+	}
 }

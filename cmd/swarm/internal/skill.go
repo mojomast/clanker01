@@ -51,6 +51,40 @@ func newSkillListCmd() *cobra.Command {
 }
 
 func runSkillList(cmd *cobra.Command, args []string) error {
+	// If connected to a remote server, fetch skills from the API.
+	if client, err := GetClient(); err == nil {
+		remoteSkills, apiErr := client.ListSkills(cmd.Context())
+		if apiErr != nil {
+			return fmt.Errorf("failed to list skills: %w", apiErr)
+		}
+
+		// Convert API responses to local skillInfo for display.
+		skills := make([]skillInfo, len(remoteSkills))
+		for i, rs := range remoteSkills {
+			var tools []toolInfo
+			for _, t := range rs.Tools {
+				tools = append(tools, toolInfo{Name: t.Name, Description: t.Description})
+			}
+			skills[i] = skillInfo{
+				Name:        rs.Name,
+				Version:     rs.Version,
+				Description: rs.Description,
+				Tools:       tools,
+			}
+		}
+
+		switch skillOutput {
+		case "json":
+			printSkillsJSON(cmd.OutOrStdout(), skills, showSkillDeps)
+		case "yaml":
+			printSkillsYAML(cmd.OutOrStdout(), skills, showSkillDeps)
+		default:
+			printSkillsTable(cmd.OutOrStdout(), skills, showSkillDeps)
+		}
+		return nil
+	}
+
+	// Fallback: local/sample data when not connected.
 	cfg := loadConfigOrDefault()
 
 	if verbose {
@@ -106,6 +140,18 @@ func runSkillInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// If connected to a remote server, install the skill via the API.
+	if client, err := GetClient(); err == nil {
+		req := &APIInstallSkillRequest{
+			Name:    name,
+			Version: skillVersion,
+			Enable:  true,
+		}
+		if apiErr := client.InstallSkill(cmd.Context(), req); apiErr != nil {
+			return fmt.Errorf("failed to install skill: %w", apiErr)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully installed skill '%s' version %s\n", name, skillVersion)
 
 	return nil
@@ -130,6 +176,13 @@ func runSkillUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Uninstalling skill '%s'\n", name)
 	}
 
+	// If connected to a remote server, remove the skill via the API.
+	if client, err := GetClient(); err == nil {
+		if apiErr := client.RemoveSkill(cmd.Context(), name); apiErr != nil {
+			return fmt.Errorf("failed to uninstall skill: %w", apiErr)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully uninstalled skill '%s'\n", name)
 
 	return nil
@@ -152,6 +205,26 @@ func newSkillInfoCmd() *cobra.Command {
 func runSkillInfo(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
+	// If connected to a remote server, fetch skill info from the API.
+	if client, err := GetClient(); err == nil {
+		rs, apiErr := client.GetSkill(cmd.Context(), name)
+		if apiErr != nil {
+			return fmt.Errorf("skill not found: %w", apiErr)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Skill: %s\n", rs.Name)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Version: %s\n", rs.Version)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Description: %s\n", rs.Description)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Status: %s\n", rs.Status)
+		if len(rs.Tools) > 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "  Tools: %d\n", len(rs.Tools))
+			for _, tool := range rs.Tools {
+				fmt.Fprintf(cmd.OutOrStdout(), "    - %s: %s\n", tool.Name, tool.Description)
+			}
+		}
+		return nil
+	}
+
+	// Fallback: local/sample data.
 	skill, err := findSkill(name)
 	if err != nil {
 		return fmt.Errorf("skill not found: %w", err)

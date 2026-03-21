@@ -682,8 +682,10 @@ func TestServer_Config(t *testing.T) {
 
 		server.router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotImplemented {
-			t.Errorf("Expected status 501, got %d", w.Code)
+		// The partial config will fail validation (missing LLM defaults, etc.)
+		// so we expect 422 Unprocessable Entity with structured errors.
+		if w.Code != http.StatusUnprocessableEntity && w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 or 422, got %d", w.Code)
 		}
 
 		var response map[string]interface{}
@@ -691,8 +693,14 @@ func TestServer_Config(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		if response["error"] != "config validation not yet implemented" {
-			t.Errorf("Expected error message about not implemented, got %v", response["error"])
+		// Must contain "valid" boolean field
+		if _, ok := response["valid"]; !ok {
+			t.Error("Expected response to contain 'valid' field")
+		}
+
+		// Must contain "errors" array field
+		if _, ok := response["errors"]; !ok {
+			t.Error("Expected response to contain 'errors' field")
 		}
 	})
 }

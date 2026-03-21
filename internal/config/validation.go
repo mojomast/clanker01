@@ -22,25 +22,7 @@ func (e *ValidationError) Error() string {
 }
 
 func Validate(config *Config) error {
-	result := &ValidationResult{
-		Valid:    true,
-		Errors:   []ValidationError{},
-		Warnings: []string{},
-	}
-
-	if config.Version == "" {
-		result.addError("version", "version is required", "")
-	}
-
-	validateProjectConfig(&config.Project, result)
-	validateLLMConfig(&config.LLM, result)
-	validateMCPConfig(&config.MCP, result)
-	validateAgentsConfig(&config.Agents, result)
-	validateSkillsConfig(&config.Skills, result)
-	validateContextConfig(&config.Context, result)
-	validateTUIConfig(&config.TUI, result)
-	validateServerConfig(&config.Server, result)
-	validateSecurityConfig(&config.Security, result)
+	result := ValidateWithResult(config)
 
 	if !result.Valid {
 		var errMsg string
@@ -58,6 +40,33 @@ func Validate(config *Config) error {
 	}
 
 	return nil
+}
+
+// ValidateWithResult performs full config validation and returns a structured
+// ValidationResult instead of an error, allowing callers to inspect individual
+// field errors and warnings.
+func ValidateWithResult(cfg *Config) *ValidationResult {
+	result := &ValidationResult{
+		Valid:    true,
+		Errors:   []ValidationError{},
+		Warnings: []string{},
+	}
+
+	if cfg.Version == "" {
+		result.addError("version", "version is required", "")
+	}
+
+	validateProjectConfig(&cfg.Project, result)
+	validateLLMConfig(&cfg.LLM, result)
+	validateMCPConfig(&cfg.MCP, result)
+	validateAgentsConfig(&cfg.Agents, result)
+	validateSkillsConfig(&cfg.Skills, result)
+	validateContextConfig(&cfg.Context, result)
+	validateTUIConfig(&cfg.TUI, result)
+	validateServerConfig(&cfg.Server, result)
+	validateSecurityConfig(&cfg.Security, result)
+
+	return result
 }
 
 func validateProjectConfig(project *ProjectConfig, result *ValidationResult) {

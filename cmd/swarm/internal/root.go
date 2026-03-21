@@ -23,6 +23,15 @@ var rootCmd = &cobra.Command{
 	Long: `Swarm is an AI coding platform that decomposes complex user requests 
 into executable tasks, manages dependencies, and coordinates multiple agent 
 roles to complete software engineering work.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Try to load a previously saved connection on startup so that
+		// subsequent commands can communicate with the remote server
+		// without requiring an explicit 'connect' each time.
+		if conn, err := LoadConnection(); err == nil && conn != nil {
+			SetConnection(conn)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},

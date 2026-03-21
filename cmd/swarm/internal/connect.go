@@ -46,9 +46,23 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Connecting to: %s\n", connectURL)
 	}
 
-	// TODO: Use ctx for the actual network call when connection logic is implemented.
-	// TODO: Use connectToken for authentication when connection logic is implemented.
-	_ = ctx
+	// Create a temporary client and test connectivity via the health endpoint.
+	client := NewClient(connectURL, connectToken)
+	client.httpClient.Timeout = connectTimeout
 
-	return fmt.Errorf("not yet implemented: connection to %s", connectURL)
+	if err := client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", connectURL, err)
+	}
+
+	// Store the active connection for use by subsequent commands.
+	conn := &Connection{URL: connectURL, Token: connectToken}
+	SetConnection(conn)
+
+	// Persist connection to disk so future CLI invocations can reuse it.
+	if err := SaveConnection(conn); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not save connection: %v\n", err)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Connected to %s\n", connectURL)
+	return nil
 }

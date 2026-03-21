@@ -48,6 +48,40 @@ func newAgentListCmd() *cobra.Command {
 }
 
 func runAgentList(cmd *cobra.Command, args []string) error {
+	// If connected to a remote server, fetch agents from the API.
+	if client, err := GetClient(); err == nil {
+		remoteAgents, apiErr := client.ListAgents(cmd.Context())
+		if apiErr != nil {
+			return fmt.Errorf("failed to list agents: %w", apiErr)
+		}
+
+		// Convert API responses to local agentInfo for display.
+		agents := make([]agentInfo, len(remoteAgents))
+		for i, ra := range remoteAgents {
+			model, _ := ra.Config["model"].(string)
+			agents[i] = agentInfo{
+				ID:     ra.ID,
+				Name:   ra.Name,
+				Type:   api.AgentType(ra.Type),
+				Model:  model,
+				Status: api.AgentStatus(ra.Status),
+			}
+		}
+
+		if agentType != "" {
+			filtered := []agentInfo{}
+			for _, a := range agents {
+				if string(a.Type) == agentType {
+					filtered = append(filtered, a)
+				}
+			}
+			agents = filtered
+		}
+
+		return formatAgentOutput(cmd.OutOrStdout(), agents, agentOutput)
+	}
+
+	// Fallback: local/sample data when not connected.
 	cfg := loadConfigOrDefault()
 
 	if verbose {
@@ -66,17 +100,21 @@ func runAgentList(cmd *cobra.Command, args []string) error {
 		agents = filtered
 	}
 
-	switch agentOutput {
-	case "json":
-		printAgentsJSON(cmd.OutOrStdout(), agents)
-	case "yaml":
-		printAgentsYAML(cmd.OutOrStdout(), agents)
-	case "table":
-		printAgentsTable(cmd.OutOrStdout(), agents)
-	default:
-		return fmt.Errorf("unknown output format %q: must be one of table, json, yaml", agentOutput)
-	}
+	return formatAgentOutput(cmd.OutOrStdout(), agents, agentOutput)
+}
 
+// formatAgentOutput renders agents in the requested format.
+func formatAgentOutput(w io.Writer, agents []agentInfo, format string) error {
+	switch format {
+	case "json":
+		printAgentsJSON(w, agents)
+	case "yaml":
+		printAgentsYAML(w, agents)
+	case "table":
+		printAgentsTable(w, agents)
+	default:
+		return fmt.Errorf("unknown output format %q: must be one of table, json, yaml", format)
+	}
 	return nil
 }
 
@@ -106,6 +144,25 @@ func runAgentCreate(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Creating agent '%s' of type '%s'\n", name, agentType)
 	}
 
+	// If connected to a remote server, create the agent via the API.
+	if client, err := GetClient(); err == nil {
+		req := &APICreateAgentRequest{
+			Type:  agentType,
+			Name:  name,
+			Model: agentModel,
+		}
+		resp, apiErr := client.CreateAgent(cmd.Context(), req)
+		if apiErr != nil {
+			return fmt.Errorf("failed to create agent: %w", apiErr)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Successfully created agent '%s'\n", resp.Name)
+		fmt.Fprintf(cmd.OutOrStdout(), "  ID: %s\n", resp.ID)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Type: %s\n", resp.Type)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Status: %s\n", resp.Status)
+		return nil
+	}
+
+	// Fallback: local mode.
 	cfg := loadConfigOrDefault()
 
 	if agentModel == "" {
@@ -143,6 +200,13 @@ func runAgentDelete(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Deleting agent '%s'\n", name)
 	}
 
+	// If connected to a remote server, delete the agent via the API.
+	if client, err := GetClient(); err == nil {
+		if apiErr := client.DeleteAgent(cmd.Context(), name); apiErr != nil {
+			return fmt.Errorf("failed to delete agent: %w", apiErr)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully deleted agent '%s'\n", name)
 
 	return nil
@@ -163,6 +227,24 @@ func newAgentInfoCmd() *cobra.Command {
 func runAgentInfo(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
+	// If connected to a remote server, fetch agent info from the API.
+	if client, err := GetClient(); err == nil {
+		ra, apiErr := client.GetAgent(cmd.Context(), name)
+		if apiErr != nil {
+			return fmt.Errorf("agent not found: %w", apiErr)
+		}
+		model, _ := ra.Config["model"].(string)
+		fmt.Fprintf(cmd.OutOrStdout(), "Agent: %s\n", ra.Name)
+		fmt.Fprintf(cmd.OutOrStdout(), "  ID: %s\n", ra.ID)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Type: %s\n", ra.Type)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Model: %s\n", model)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Status: %s\n", ra.Status)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Created: %s\n", ra.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(cmd.OutOrStdout(), "  Updated: %s\n", ra.UpdatedAt.Format("2006-01-02 15:04:05"))
+		return nil
+	}
+
+	// Fallback: local/sample data.
 	agent, err := findAgent(name)
 	if err != nil {
 		return fmt.Errorf("agent not found: %w", err)
@@ -194,7 +276,28 @@ func newAgentStatsCmd() *cobra.Command {
 }
 
 func runAgentStats(cmd *cobra.Command, args []string) error {
-	agents := getSampleAgents()
+	var agents []agentInfo
+
+	// If connected to a remote server, fetch agents from the API.
+	if client, err := GetClient(); err == nil {
+		remoteAgents, apiErr := client.ListAgents(cmd.Context())
+		if apiErr != nil {
+			return fmt.Errorf("failed to fetch agent stats: %w", apiErr)
+		}
+		for _, ra := range remoteAgents {
+			model, _ := ra.Config["model"].(string)
+			agents = append(agents, agentInfo{
+				ID:     ra.ID,
+				Name:   ra.Name,
+				Type:   api.AgentType(ra.Type),
+				Model:  model,
+				Status: api.AgentStatus(ra.Status),
+			})
+		}
+	} else {
+		// Fallback: local/sample data.
+		agents = getSampleAgents()
+	}
 
 	if agentType != "" {
 		filtered := []agentInfo{}

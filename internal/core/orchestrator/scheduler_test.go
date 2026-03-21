@@ -15,7 +15,7 @@ func TestNewScheduler(t *testing.T) {
 		MaxConcurrent:    5,
 	}
 
-	s := NewScheduler(nil, taskQueue, cfg)
+	s := NewScheduler(nil, taskQueue, cfg, nil)
 
 	assert.NotNil(t, s)
 	assert.Equal(t, cfg.ScheduleInterval, s.config.ScheduleInterval)
@@ -26,7 +26,7 @@ func TestNewScheduler(t *testing.T) {
 
 func TestScheduler_GetAssignment(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	task := &api.Task{ID: "task-1", Priority: 10, Prompt: "Test task"}
 	taskQueue.Enqueue(nil, task)
@@ -42,7 +42,7 @@ func TestScheduler_GetAssignment(t *testing.T) {
 
 func TestScheduler_GetAssignment_NotFound(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	_, ok := s.GetAssignment("nonexistent")
 	assert.False(t, ok)
@@ -50,7 +50,7 @@ func TestScheduler_GetAssignment_NotFound(t *testing.T) {
 
 func TestScheduler_GetAgentLoad(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	s.mu.Lock()
 	s.agentLoads["agent-1"] = 3
@@ -62,7 +62,7 @@ func TestScheduler_GetAgentLoad(t *testing.T) {
 
 func TestScheduler_GetAgentLoad_NotFound(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	load := s.GetAgentLoad("nonexistent")
 	assert.Equal(t, 0, load)
@@ -70,7 +70,7 @@ func TestScheduler_GetAgentLoad_NotFound(t *testing.T) {
 
 func TestScheduler_PickLeastLoaded(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	agents := []api.Agent{
 		&mockAgent{id: "agent-1"},
@@ -90,7 +90,7 @@ func TestScheduler_PickLeastLoaded(t *testing.T) {
 
 func TestScheduler_GetStats(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	s.mu.Lock()
 	s.assignments["task-1"] = "agent-1"
@@ -107,7 +107,7 @@ func TestScheduler_GetStats(t *testing.T) {
 
 func TestScheduler_ReassignTask_NotAssigned(t *testing.T) {
 	taskQueue := NewTaskQueue()
-	s := NewScheduler(nil, taskQueue, nil)
+	s := NewScheduler(nil, taskQueue, nil, nil)
 
 	err := s.ReassignTask(context.Background(), "nonexistent")
 	assert.Error(t, err)

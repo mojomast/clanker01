@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/swarm-ai/swarm/internal/core/task"
 	"github.com/swarm-ai/swarm/pkg/api"
 )
 
@@ -13,6 +14,7 @@ type Scheduler struct {
 	orchestrator *Orchestrator
 	taskQueue    *TaskQueue
 	config       *SchedulerConfig
+	verifier     *task.Verifier
 
 	mu          sync.RWMutex
 	assignments map[string]string // taskID -> agentID
@@ -24,7 +26,7 @@ type SchedulerConfig struct {
 	MaxConcurrent    int
 }
 
-func NewScheduler(orch *Orchestrator, queue *TaskQueue, cfg *SchedulerConfig) *Scheduler {
+func NewScheduler(orch *Orchestrator, queue *TaskQueue, cfg *SchedulerConfig, verifier *task.Verifier) *Scheduler {
 	if cfg == nil {
 		cfg = &SchedulerConfig{
 			ScheduleInterval: 100 * time.Millisecond,
@@ -36,6 +38,7 @@ func NewScheduler(orch *Orchestrator, queue *TaskQueue, cfg *SchedulerConfig) *S
 		orchestrator: orch,
 		taskQueue:    queue,
 		config:       cfg,
+		verifier:     verifier,
 		assignments:  make(map[string]string),
 		agentLoads:   make(map[string]int),
 	}
@@ -82,18 +85,18 @@ func (s *Scheduler) assignTask(ctx context.Context, agent api.Agent, task *api.T
 	go s.executeTask(ctx, agent, task)
 }
 
-func (s *Scheduler) executeTask(ctx context.Context, agent api.Agent, task *api.Task) {
+func (s *Scheduler) executeTask(ctx context.Context, agent api.Agent, apiTask *api.Task) {
 	defer func() {
 		s.mu.Lock()
 		s.agentLoads[agent.ID()]--
-		delete(s.assignments, task.ID)
+		delete(s.assignments, apiTask.ID)
 		s.mu.Unlock()
 	}()
 
-	agentResult, err := agent.Execute(ctx, task)
+	agentResult, err := agent.Execute(ctx, apiTask)
 
 	if err != nil {
-		s.taskQueue.Fail(task.ID, err)
+		s.taskQueue.Fail(apiTask.ID, err)
 		return
 	}
 
@@ -107,7 +110,59 @@ func (s *Scheduler) executeTask(ctx context.Context, agent api.Agent, task *api.
 		CompletedAt: agentResult.CompletedAt,
 	}
 
-	s.taskQueue.Complete(task.ID, taskResult)
+	// Verify the result if a verifier is configured and the task has verification spec.
+	if verifyErr := s.verifyTaskResult(ctx, apiTask, taskResult); verifyErr != nil {
+		// Verification failed — if retries remain, re-enqueue; otherwise fail.
+		if apiTask.RetryCount < apiTask.MaxRetries {
+			apiTask.RetryCount++
+			apiTask.Status = api.TaskStatusQueued
+			_ = s.taskQueue.Enqueue(ctx, apiTask)
+			return
+		}
+		s.taskQueue.Fail(apiTask.ID, verifyErr)
+		return
+	}
+
+	s.taskQueue.Complete(apiTask.ID, taskResult)
+}
+
+// verifyTaskResult runs the Verifier on a completed task. Returns nil if
+// verification passes, is not configured, or the task has no verification spec.
+func (s *Scheduler) verifyTaskResult(ctx context.Context, apiTask *api.Task, result *api.TaskResult) error {
+	if s.verifier == nil {
+		return nil
+	}
+
+	// Only verify tasks that carry a verification spec.
+	if apiTask.Verification == nil || len(apiTask.Verification) == 0 {
+		return nil
+	}
+
+	// Mark the task as verifying while we check.
+	apiTask.Status = api.TaskStatusVerifying
+
+	// Convert the api.Task to an internal task.Task so the verifier can operate.
+	internalTask := task.APITaskToTask(apiTask)
+
+	// Populate internal task output from the result.
+	if result != nil && result.Output != nil {
+		if outputMap, ok := result.Output.(map[string]any); ok {
+			internalTask.Output = outputMap
+		} else {
+			internalTask.Output = map[string]any{"result": result.Output}
+		}
+	}
+
+	vr := s.verifier.Verify(ctx, internalTask)
+	if !vr.Valid {
+		msgs := make([]string, 0, len(vr.Failures))
+		for _, f := range vr.Failures {
+			msgs = append(msgs, f.Message)
+		}
+		return fmt.Errorf("verification failed: %v", msgs)
+	}
+
+	return nil
 }
 
 func (s *Scheduler) GetAssignment(taskID string) (string, bool) {

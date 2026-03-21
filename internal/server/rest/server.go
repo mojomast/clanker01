@@ -55,6 +55,7 @@ type LoggingConfig struct {
 type Server struct {
 	config      *ServerConfig
 	appConfig   *config.Config
+	configMgr   *config.Manager // live config manager (optional)
 	router      *mux.Router
 	httpSrv     *http.Server
 	jwtAuth     *auth.JWTAuthenticator
@@ -68,6 +69,15 @@ type Server struct {
 	agents map[string]*AgentInfo
 	tasks  map[string]*TaskInfo
 	skills map[string]*SkillInfo
+}
+
+// ServerOption is a functional option for configuring the Server.
+type ServerOption func(*Server)
+
+// WithConfigManager sets an optional live config manager on the server,
+// enabling real-time config GET/PUT through the REST API.
+func WithConfigManager(mgr *config.Manager) ServerOption {
+	return func(s *Server) { s.configMgr = mgr }
 }
 
 type AgentInfo struct {
@@ -107,7 +117,7 @@ type SkillInfo struct {
 	Config      map[string]interface{}
 }
 
-func NewServer(serverConfig *ServerConfig, appConfig *config.Config, jwtAuth *auth.JWTAuthenticator) (*Server, error) {
+func NewServer(serverConfig *ServerConfig, appConfig *config.Config, jwtAuth *auth.JWTAuthenticator, opts ...ServerOption) (*Server, error) {
 	if serverConfig == nil {
 		serverConfig = DefaultConfig()
 	}
@@ -125,6 +135,11 @@ func NewServer(serverConfig *ServerConfig, appConfig *config.Config, jwtAuth *au
 		agents:    make(map[string]*AgentInfo),
 		tasks:     make(map[string]*TaskInfo),
 		skills:    make(map[string]*SkillInfo),
+	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	if err := s.initAuth(); err != nil {
@@ -256,8 +271,18 @@ func (s *Server) setupRoutes() error {
 	configRouter.HandleFunc("", s.handleGetConfig).Methods("GET")
 	configRouter.HandleFunc("", s.handleUpdateConfig).Methods("PUT")
 	configRouter.HandleFunc("/validate", s.handleValidateConfig).Methods("POST")
+	configRouter.HandleFunc("/schema", s.handleGetConfigSchema).Methods("GET")
 
 	return nil
+}
+
+// getConfig returns the current application config, preferring the live
+// config manager if one was provided via WithConfigManager.
+func (s *Server) getConfig() *config.Config {
+	if s.configMgr != nil {
+		return s.configMgr.Get()
+	}
+	return s.appConfig
 }
 
 func (s *Server) initHTTPServer() error {

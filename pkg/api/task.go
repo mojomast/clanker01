@@ -14,6 +14,7 @@ const (
 	TaskStatusCompleted TaskStatus = "completed"
 	TaskStatusFailed    TaskStatus = "failed"
 	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusVerifying TaskStatus = "verifying"
 )
 
 type Task struct {
@@ -38,6 +39,9 @@ type Task struct {
 	MaxRetries int
 	RetryCount int
 	Timeout    time.Duration
+
+	IsComplex    bool           `json:"is_complex,omitempty"`
+	Verification map[string]any `json:"verification,omitempty"`
 
 	CreatedAt   time.Time
 	StartedAt   time.Time

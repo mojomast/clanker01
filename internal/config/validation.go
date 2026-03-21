@@ -1,9 +1,7 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -45,7 +43,18 @@ func Validate(config *Config) error {
 	validateSecurityConfig(&config.Security, result)
 
 	if !result.Valid {
-		return formatValidationErrors(result.Errors)
+		var errMsg string
+		if len(result.Warnings) > 0 {
+			errMsg = formatValidationErrors(result.Errors).Error() + "\nwarnings:\n" + strings.Join(result.Warnings, "\n")
+		} else {
+			errMsg = formatValidationErrors(result.Errors).Error()
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	// Log warnings even when validation passes
+	for _, warning := range result.Warnings {
+		fmt.Printf("[config warning] %s\n", warning)
 	}
 
 	return nil
@@ -305,68 +314,4 @@ func ValidateProviderConfig(provider *ProviderConfig) error {
 		}
 	}
 	return nil
-}
-
-func MergeConfigs(base, override *Config) *Config {
-	if base == nil {
-		return override
-	}
-	if override == nil {
-		return base
-	}
-
-	result := deepCopy(base)
-	mergeStruct(reflect.ValueOf(result).Elem(), reflect.ValueOf(override).Elem())
-	return result
-}
-
-func deepCopy(config *Config) *Config {
-	data, err := json.Marshal(config)
-	if err != nil {
-		return nil
-	}
-	var copy Config
-	if err := json.Unmarshal(data, &copy); err != nil {
-		return nil
-	}
-	return &copy
-}
-
-func mergeStruct(base, override reflect.Value) {
-	for i := 0; i < override.NumField(); i++ {
-		fieldName := override.Type().Field(i).Name
-		baseField := base.FieldByName(fieldName)
-		overrideField := override.Field(i)
-
-		if !baseField.IsValid() || !overrideField.IsValid() {
-			continue
-		}
-
-		if overrideField.IsZero() {
-			continue
-		}
-
-		switch overrideField.Kind() {
-		case reflect.Struct:
-			if baseField.CanAddr() {
-				mergeStruct(baseField, overrideField)
-			}
-		case reflect.Map:
-			if overrideField.Len() > 0 {
-				baseField.Set(reflect.MakeMap(overrideField.Type()))
-				for _, key := range overrideField.MapKeys() {
-					baseField.SetMapIndex(key, overrideField.MapIndex(key))
-				}
-			}
-		case reflect.Slice:
-			if overrideField.Len() > 0 {
-				baseField.Set(reflect.MakeSlice(overrideField.Type(), overrideField.Len(), overrideField.Cap()))
-				for i := 0; i < overrideField.Len(); i++ {
-					baseField.Index(i).Set(overrideField.Index(i))
-				}
-			}
-		default:
-			baseField.Set(overrideField)
-		}
-	}
 }

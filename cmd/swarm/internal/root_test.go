@@ -70,10 +70,9 @@ func TestConnectCmd(t *testing.T) {
 		contains []string
 	}{
 		{
-			name:     "connect with URL",
-			args:     []string{"connect", "--url", "http://localhost:8080"},
-			wantErr:  false,
-			contains: []string{"Successfully connected", "http://localhost:8080"},
+			name:    "connect with URL",
+			args:    []string{"connect", "--url", "http://localhost:8080"},
+			wantErr: true,
 		},
 		{
 			name:    "connect help",

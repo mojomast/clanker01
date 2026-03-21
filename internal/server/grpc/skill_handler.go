@@ -26,6 +26,13 @@ func NewSkillHandler(server *Server) *SkillHandler {
 
 func (h *SkillHandler) RegisterSkill(ctx context.Context, req *proto.RegisterSkillRequest) (*proto.RegisterSkillResponse, error) {
 	manifest := req.Manifest
+	if manifest == nil {
+		return nil, status.Error(codes.InvalidArgument, "manifest is required")
+	}
+	if manifest.Metadata == nil {
+		return nil, status.Error(codes.InvalidArgument, "manifest metadata is required")
+	}
+
 	skill := &proto.Skill{
 		Id:          fmt.Sprintf("%s@%s", manifest.Metadata.Name, manifest.Metadata.Version),
 		Name:        manifest.Metadata.Name,
@@ -108,6 +115,12 @@ func (h *SkillHandler) ListSkills(ctx context.Context, req *proto.ListSkillsRequ
 func (h *SkillHandler) UpdateSkill(ctx context.Context, req *proto.UpdateSkillRequest) (*proto.UpdateSkillResponse, error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "skill name is required")
+	}
+	if req.Manifest == nil {
+		return nil, status.Error(codes.InvalidArgument, "manifest is required")
+	}
+	if req.Manifest.Metadata == nil {
+		return nil, status.Error(codes.InvalidArgument, "manifest metadata is required")
 	}
 
 	skill := &proto.Skill{

@@ -99,7 +99,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":    "healthy",
 		"timestamp": time.Now().UTC(),
 		"version":   s.appConfig.Version,
-		"uptime":    time.Since(s.ctx.Value("startTime").(time.Time)).String(),
+	}
+
+	if startTime, ok := s.ctx.Value(startTimeKey).(time.Time); ok {
+		health["uptime"] = time.Since(startTime).String()
+	} else {
+		health["uptime"] = "unknown"
 	}
 
 	s.respondJSON(w, http.StatusOK, health)
@@ -375,7 +380,7 @@ func (s *Server) handleResumeAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentInfo.Status = string(api.AgentStatusRunning)
+	agentInfo.Status = string(api.AgentStatusReady)
 	agentInfo.UpdatedAt = time.Now()
 	s.mu.Unlock()
 
@@ -850,27 +855,9 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
-	var configUpdates map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&configUpdates); err != nil {
-		s.respondError(w, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "Config updated successfully",
-		"updates": configUpdates,
-	})
+	s.respondError(w, http.StatusNotImplemented, "config updates not yet implemented", nil)
 }
 
 func (s *Server) handleValidateConfig(w http.ResponseWriter, r *http.Request) {
-	var config map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
-		s.respondError(w, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
-		"valid":  true,
-		"errors": []interface{}{},
-	})
+	s.respondError(w, http.StatusNotImplemented, "config validation not yet implemented", nil)
 }

@@ -16,6 +16,7 @@ type Orchestrator struct {
 	stateManager *StateManager
 	recovery     *RecoveryManager
 	conflictMgr  *ConflictManager
+	agents       map[string]api.Agent
 
 	mu      sync.RWMutex
 	stopCh  chan struct{}
@@ -84,6 +85,7 @@ func NewOrchestrator(cfg *OrchestratorConfig) (*Orchestrator, error) {
 		conflictMgr: &ConflictManager{
 			conflicts: make(map[string]*Conflict),
 		},
+		agents: make(map[string]api.Agent),
 		stopCh: make(chan struct{}),
 	}, nil
 }
@@ -144,15 +146,17 @@ func (o *Orchestrator) SubmitTask(ctx context.Context, task *api.Task) error {
 		task.Status = api.TaskStatusPending
 	}
 
-	state := o.stateManager.GetState()
-	state.Metrics.TasksSubmitted++
-
-	_ = state
+	o.stateManager.mu.Lock()
+	o.stateManager.currentState.Metrics.TasksSubmitted++
+	o.stateManager.mu.Unlock()
 
 	if task.ParentID != "" {
 		task.Dependencies = append(task.Dependencies, task.ParentID)
 	}
 
+	// Pre-check for cycles by temporarily adding to the dependency graph.
+	// Enqueue() also calls dependencies.Add(), so we remove first if a cycle
+	// is detected, or let Enqueue handle the final addition.
 	o.taskQueue.dependencies.Add(task)
 
 	if o.taskQueue.dependencies.HasCycle() {
@@ -172,6 +176,10 @@ func (o *Orchestrator) SubmitTask(ctx context.Context, task *api.Task) error {
 			return fmt.Errorf("circular dependency detected: %v", cycle)
 		}
 	}
+
+	// Remove the temporary addition so Enqueue can add it cleanly (avoiding
+	// double addition to the dependency graph's reverse-dependency map).
+	o.taskQueue.dependencies.Remove(task.ID)
 
 	return o.taskQueue.Enqueue(ctx, task)
 }
@@ -198,12 +206,36 @@ func (o *Orchestrator) DecomposeTask(ctx context.Context, task *api.Task) ([]*ap
 	return subtasks, nil
 }
 
+func (o *Orchestrator) RegisterAgent(agent api.Agent) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.agents[agent.ID()] = agent
+}
+
 func (o *Orchestrator) GetAvailableAgents() []api.Agent {
-	return []api.Agent{}
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	var available []api.Agent
+	for _, agent := range o.agents {
+		if agent.Status() == api.AgentStatusReady {
+			available = append(available, agent)
+		}
+	}
+	return available
 }
 
 func (o *Orchestrator) GetAvailableAgentsByType(agentType api.AgentType) []api.Agent {
-	return []api.Agent{}
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	var available []api.Agent
+	for _, agent := range o.agents {
+		if agent.Type() == agentType && agent.Status() == api.AgentStatusReady {
+			available = append(available, agent)
+		}
+	}
+	return available
 }
 
 func (o *Orchestrator) GetTask(taskID string) *api.Task {

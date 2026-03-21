@@ -290,7 +290,10 @@ func (s *Skill) writeFile(args map[string]interface{}) (*loader.Result, error) {
 		return &loader.Result{Success: false, Error: err.Error()}, nil
 	}
 
-	info, _ := os.Stat(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return &loader.Result{Success: false, Error: fmt.Sprintf("stat after write: %s", err.Error())}, nil
+	}
 
 	result := map[string]interface{}{
 		"success": true,

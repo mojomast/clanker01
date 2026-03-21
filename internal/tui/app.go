@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -43,7 +45,11 @@ func (a *App) RunWithOutput() (Model, error) {
 	if err != nil {
 		return a.model, err
 	}
-	return result.(Model), nil
+	finalModel, ok := result.(Model)
+	if !ok {
+		return a.model, fmt.Errorf("unexpected model type: %T", result)
+	}
+	return finalModel, nil
 }
 
 func (a *App) Quit() {

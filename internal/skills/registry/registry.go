@@ -23,18 +23,18 @@ func NewSkillRegistry() *SkillRegistry {
 	}
 }
 
-func (r *SkillRegistry) AddSource(source DiscoverySource) {
+func (r *SkillRegistry) AddSource(source DiscoverySource) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for _, s := range r.sources {
 		if s.Name() == source.Name() {
-			_ = s
-			return
+			return fmt.Errorf("source already exists: %s", source.Name())
 		}
 	}
 
 	r.sources = append(r.sources, source)
+	return nil
 }
 
 func (r *SkillRegistry) RemoveSource(name string) {
@@ -152,16 +152,16 @@ func (r *SkillRegistry) List(limit int) []*SkillMatch {
 		ids = ids[:limit]
 	}
 
-	matches := make([]*SkillMatch, len(ids))
-	for i, id := range ids {
+	var matches []*SkillMatch
+	for _, id := range ids {
 		_, ok := r.skills[id]
 		if !ok {
 			continue
 		}
-		matches[i] = &SkillMatch{
+		matches = append(matches, &SkillMatch{
 			SkillID: id,
 			Score:   1.0,
-		}
+		})
 	}
 
 	return matches
@@ -176,16 +176,16 @@ func (r *SkillRegistry) ListByTag(tag string, limit int) []*SkillMatch {
 		ids = ids[:limit]
 	}
 
-	matches := make([]*SkillMatch, len(ids))
-	for i, id := range ids {
+	var matches []*SkillMatch
+	for _, id := range ids {
 		_, ok := r.skills[id]
 		if !ok {
 			continue
 		}
-		matches[i] = &SkillMatch{
+		matches = append(matches, &SkillMatch{
 			SkillID: id,
 			Score:   1.0,
-		}
+		})
 	}
 
 	return matches
@@ -200,16 +200,16 @@ func (r *SkillRegistry) ListByRuntime(runtime string, limit int) []*SkillMatch {
 		ids = ids[:limit]
 	}
 
-	matches := make([]*SkillMatch, len(ids))
-	for i, id := range ids {
+	var matches []*SkillMatch
+	for _, id := range ids {
 		_, ok := r.skills[id]
 		if !ok {
 			continue
 		}
-		matches[i] = &SkillMatch{
+		matches = append(matches, &SkillMatch{
 			SkillID: id,
 			Score:   1.0,
-		}
+		})
 	}
 
 	return matches

@@ -38,7 +38,7 @@ func TestViewDashboard(t *testing.T) {
 	view := model.View()
 
 	assert.Contains(t, view, "SWARM")
-	assert.Contains(t, view, "Dashboard View")
+	assert.Contains(t, view, "DASHBOARD")
 	assert.Contains(t, view, "v1.0.0")
 	assert.Contains(t, view, "[a] Add Agent")
 	assert.Contains(t, view, "[t] New Task")
@@ -57,7 +57,7 @@ func TestViewAgents(t *testing.T) {
 
 	view := model.View()
 
-	assert.Contains(t, view, "Agents View")
+	assert.Contains(t, view, "AGENTS")
 	assert.Contains(t, view, "[Enter] Details")
 	assert.Contains(t, view, "[a] Add")
 	assert.Contains(t, view, "[d] Delete")
@@ -84,7 +84,7 @@ func TestViewTasks(t *testing.T) {
 
 	view := model.View()
 
-	assert.Contains(t, view, "Tasks View")
+	assert.Contains(t, view, "TASK QUEUE")
 	assert.Contains(t, view, "[Enter] View")
 	assert.Contains(t, view, "[d] Delete")
 	assert.Contains(t, view, "[↑↓] Navigate")
@@ -170,7 +170,7 @@ func TestViewConfig(t *testing.T) {
 
 	view := model.View()
 
-	assert.Contains(t, view, "Config View")
+	assert.Contains(t, view, "CONFIGURATION")
 	assert.Contains(t, view, "[Tab] Next Field")
 	assert.Contains(t, view, "[Enter] Edit")
 	assert.Contains(t, view, "[Esc] Cancel")
@@ -345,7 +345,7 @@ func TestViewWithAgents(t *testing.T) {
 	view := model.View()
 
 	assert.Contains(t, view, "SWARM")
-	assert.Contains(t, view, "Dashboard View")
+	assert.Contains(t, view, "DASHBOARD")
 }
 
 func TestViewWithTasks(t *testing.T) {
@@ -364,7 +364,7 @@ func TestViewWithTasks(t *testing.T) {
 	view := model.View()
 
 	assert.Contains(t, view, "SWARM")
-	assert.Contains(t, view, "Dashboard View")
+	assert.Contains(t, view, "DASHBOARD")
 }
 
 func TestViewFooterDifferentViews(t *testing.T) {
@@ -454,7 +454,7 @@ func TestRenderMainDashboard(t *testing.T) {
 
 	main := model.renderMain()
 
-	assert.Contains(t, main, "Dashboard View")
+	assert.Contains(t, main, "DASHBOARD")
 }
 
 func TestRenderMainAgents(t *testing.T) {
@@ -466,5 +466,5 @@ func TestRenderMainAgents(t *testing.T) {
 
 	main := model.renderMain()
 
-	assert.Contains(t, main, "Agents View")
+	assert.Contains(t, main, "AGENTS")
 }

@@ -373,32 +373,26 @@ func (bb *BufferedBroadcaster) Stop() {
 }
 
 type MessageFilter struct {
-	filters []func(*Message) bool
+	filters map[string]func(*Message) bool
 	mu      sync.RWMutex
 }
 
 func NewMessageFilter() *MessageFilter {
 	return &MessageFilter{
-		filters: make([]func(*Message) bool, 0),
+		filters: make(map[string]func(*Message) bool),
 	}
 }
 
-func (mf *MessageFilter) AddFilter(filter func(*Message) bool) {
+func (mf *MessageFilter) AddFilter(id string, filter func(*Message) bool) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
-	mf.filters = append(mf.filters, filter)
+	mf.filters[id] = filter
 }
 
-func (mf *MessageFilter) RemoveFilter(filter func(*Message) bool) {
+func (mf *MessageFilter) RemoveFilter(id string) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
-
-	for i, f := range mf.filters {
-		if &f == &filter {
-			mf.filters = append(mf.filters[:i], mf.filters[i+1:]...)
-			break
-		}
-	}
+	delete(mf.filters, id)
 }
 
 func (mf *MessageFilter) ShouldSend(msg *Message) bool {
@@ -417,7 +411,7 @@ func (mf *MessageFilter) ShouldSend(msg *Message) bool {
 func (mf *MessageFilter) Clear() {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
-	mf.filters = mf.filters[:0]
+	mf.filters = make(map[string]func(*Message) bool)
 }
 
 type PriorityBroadcaster struct {

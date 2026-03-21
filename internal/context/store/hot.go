@@ -3,6 +3,7 @@ package store
 import (
 	"container/list"
 	"sync"
+	"time"
 
 	"github.com/swarm-ai/swarm/pkg/api"
 )
@@ -40,7 +41,7 @@ func (s *HotStore) Get(key string) (*api.ContextEntry, bool) {
 
 	s.lru.MoveToFront(elem)
 	le := elem.Value.(*lruEntry)
-	le.entry.AccessedAt = le.entry.AccessedAt.Add(0)
+	le.entry.AccessedAt = time.Now()
 	return le.entry, true
 }
 

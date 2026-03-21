@@ -149,7 +149,12 @@ func (rm *RecoveryManager) validateSession(session *Session) error {
 		return fmt.Errorf("agent coordination state is nil")
 	}
 
-	totalMessages := len(session.Conversation.Messages) + len(session.Conversation.CompressedSummaries)
+	// Sum the actual message count: current messages + messages represented
+	// by each compressed summary (using summary.MessageCount, not just counting summaries).
+	totalMessages := len(session.Conversation.Messages)
+	for _, summary := range session.Conversation.CompressedSummaries {
+		totalMessages += summary.MessageCount
+	}
 	if totalMessages != session.Conversation.TotalMessages {
 		return fmt.Errorf("message count mismatch: expected %d, got %d",
 			session.Conversation.TotalMessages, totalMessages)

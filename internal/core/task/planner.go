@@ -76,6 +76,13 @@ func (p *Planner) Plan(ctx context.Context, obj Objective) (*Plan, error) {
 		}
 	}
 
+	// Collect replacements first to avoid mutating the slice during iteration.
+	type replacement struct {
+		old      *Task
+		newTasks []*Task
+	}
+	var replacements []replacement
+
 	for _, task := range tasks {
 		if task.CreatedAt.IsZero() {
 			task.CreatedAt = time.Now()
@@ -87,8 +94,13 @@ func (p *Planner) Plan(ctx context.Context, obj Objective) (*Plan, error) {
 			return nil, fmt.Errorf("decompose task %s: %w", task.ID, err)
 		}
 		if len(decomposedTasks) > 1 {
-			tasks = replaceTask(tasks, task, decomposedTasks)
+			replacements = append(replacements, replacement{old: task, newTasks: decomposedTasks})
 		}
+	}
+
+	// Apply replacements after the loop to avoid slice mutation during iteration.
+	for _, r := range replacements {
+		tasks = replaceTask(tasks, r.old, r.newTasks)
 	}
 
 	if err := p.resolveDependencies(tasks); err != nil {

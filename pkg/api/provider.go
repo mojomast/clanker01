@@ -70,7 +70,8 @@ type Message struct {
 	Name       string
 }
 
-// ContentPart for multimodal messages
+// TODO: ContentPart and ImageURL are defined for future multimodal support.
+// TODO: AudioContent and VideoContent are also reserved for future multimodal use.
 type ContentPart struct {
 	Type     string
 	Text     string
@@ -141,17 +142,6 @@ type Choice struct {
 	Index        int
 	Message      Message
 	FinishReason string
-	LogProbs     *LogProbs
-}
-
-type LogProbs struct {
-	Content []TokenLogProb
-}
-
-type TokenLogProb struct {
-	Token   string
-	LogProb float64
-	Bytes   []byte
 }
 
 type Usage struct {
@@ -172,13 +162,9 @@ type ChatStreamEvent struct {
 
 type StreamEventType string
 
-const (
-	StreamEventDelta    StreamEventType = "delta"
-	StreamEventDone     StreamEventType = "done"
-	StreamEventError    StreamEventType = "error"
-	StreamEventToolCall StreamEventType = "tool_call"
-)
-
+// TODO: MessageDelta, ToolCallDelta, and FunctionCallDelta are part of the streaming
+// API contract. They are not yet populated by providers but should be kept for when
+// streaming support is fully implemented.
 type MessageDelta struct {
 	Role      string
 	Content   string
@@ -214,6 +200,8 @@ type ProviderConfig struct {
 	Models     []ModelInfo
 }
 
+// TODO: RateLimitConfig is referenced by ProviderConfig but not yet used by any
+// provider implementation. Remove or implement when rate limiting is added.
 type RateLimitConfig struct {
 	RequestsPerMinute int
 	TokensPerMinute   int

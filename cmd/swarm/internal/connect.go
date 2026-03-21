@@ -30,7 +30,7 @@ func newConnectCmd() *cobra.Command {
 }
 
 func runConnect(cmd *cobra.Command, args []string) error {
-	_, cancel := context.WithTimeout(cmd.Context(), connectTimeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), connectTimeout)
 	defer cancel()
 
 	if connectURL == "" {
@@ -46,9 +46,9 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Connecting to: %s\n", connectURL)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Successfully connected to Swarm server at %s\n", connectURL)
-	fmt.Fprintln(cmd.OutOrStdout(), "Use 'swarm agent list' to see available agents")
-	fmt.Fprintln(cmd.OutOrStdout(), "Use 'swarm skill list' to see available skills")
+	// TODO: Use ctx for the actual network call when connection logic is implemented.
+	// TODO: Use connectToken for authentication when connection logic is implemented.
+	_ = ctx
 
-	return nil
+	return fmt.Errorf("not yet implemented: connection to %s", connectURL)
 }

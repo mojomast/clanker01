@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/swarm-ai/swarm/pkg/api"
@@ -115,7 +117,7 @@ func (rm *RecoveryManager) retryTask(ctx context.Context, task *api.Task) error 
 	task.Status = api.TaskStatusQueued
 	task.Error = nil
 
-	delay := rm.config.RetryDelay * time.Duration(1/rm.config.RetryBackoff*float64(task.RetryCount))
+	delay := rm.config.RetryDelay * time.Duration(math.Pow(rm.config.RetryBackoff, float64(task.RetryCount)))
 	time.Sleep(delay)
 
 	return rm.orchestrator.taskQueue.Enqueue(ctx, task)
@@ -226,14 +228,5 @@ func isComplexityError(err error) bool {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }

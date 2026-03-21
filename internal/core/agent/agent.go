@@ -103,13 +103,19 @@ func (a *BaseAgent) Start(ctx context.Context) error {
 
 func (a *BaseAgent) Stop(ctx context.Context) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	hasTask := a.currentTask != nil
+	a.mu.Unlock()
 
-	if a.currentTask != nil {
+	// Wait for current task to finish (with timeout) WITHOUT holding the mutex
+	// to avoid deadlock with Execute() which also needs the lock.
+	if hasTask {
 		taskCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		<-taskCtx.Done()
 	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
 	if err := a.stateMachine.Transition(a.status, api.AgentStatusTerminated); err != nil {
 		return fmt.Errorf("invalid state transition: %w", err)
@@ -178,8 +184,8 @@ func (a *BaseAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResu
 		a.mu.Unlock()
 	}()
 
-	taskCtx := a.buildTaskContext(task)
-	messages := a.buildMessages(task, taskCtx)
+	_ = a.buildTaskContext(task) // context available for future use
+	messages := a.buildMessages(task)
 
 	req := &api.ChatRequest{
 		Model:        a.config.Model,
@@ -221,8 +227,12 @@ func (a *BaseAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResu
 }
 
 func (a *BaseAgent) SendMessage(ctx context.Context, msg *api.AgentMessage) error {
-	a.outbox <- msg
-	return nil
+	select {
+	case a.outbox <- msg:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("send message cancelled: %w", ctx.Err())
+	}
 }
 
 func (a *BaseAgent) ReceiveMessage() <-chan *api.AgentMessage {
@@ -317,7 +327,7 @@ func (a *BaseAgent) buildTaskContext(task *api.Task) map[string]any {
 	}
 }
 
-func (a *BaseAgent) buildMessages(task *api.Task, taskCtx map[string]any) []api.Message {
+func (a *BaseAgent) buildMessages(task *api.Task) []api.Message {
 	return []api.Message{
 		{
 			Role:    "system",
@@ -394,24 +404,33 @@ func (a *BaseAgent) handleError(ctx context.Context, err error) {
 }
 
 func (a *BaseAgent) handleTaskAssignment(ctx context.Context, msg *api.AgentMessage) {
+	fmt.Printf("[agent:%s] received task assignment message from %s\n", a.id, msg.Sender.ID)
 }
 
 func (a *BaseAgent) handleContextShare(ctx context.Context, msg *api.AgentMessage) {
+	fmt.Printf("[agent:%s] received context share message from %s\n", a.id, msg.Sender.ID)
 }
 
 func (a *BaseAgent) handleAssistanceRequest(ctx context.Context, msg *api.AgentMessage) {
+	fmt.Printf("[agent:%s] received assistance request message from %s\n", a.id, msg.Sender.ID)
 }
 
 func (a *BaseAgent) handleConsensusRequest(ctx context.Context, msg *api.AgentMessage) {
+	fmt.Printf("[agent:%s] received consensus request message from %s\n", a.id, msg.Sender.ID)
 }
 
 func (a *BaseAgent) handleHeartbeat(ctx context.Context, msg *api.AgentMessage) {
+	fmt.Printf("[agent:%s] received heartbeat message from %s\n", a.id, msg.Sender.ID)
 }
 
+// TODO: calculateCPUUsage needs OS-level integration (e.g., runtime.ReadMemStats,
+// /proc/self/stat on Linux, or a library like shirou/gopsutil) to return real values.
 func (a *BaseAgent) calculateCPUUsage() float64 {
 	return 0.0
 }
 
+// TODO: calculateMemoryUsage needs OS-level integration (e.g., runtime.ReadMemStats,
+// /proc/self/stat on Linux, or a library like shirou/gopsutil) to return real values.
 func (a *BaseAgent) calculateMemoryUsage() int {
 	return 0
 }

@@ -32,13 +32,11 @@ func mapHTTPMethodToAction(method string) Action {
 
 type RBACMiddleware struct {
 	checker *PermissionChecker
-	auth    *auth.AuthMiddleware
 }
 
-func NewRBACMiddleware(checker *PermissionChecker, auth *auth.AuthMiddleware) *RBACMiddleware {
+func NewRBACMiddleware(checker *PermissionChecker, _ *auth.AuthMiddleware) *RBACMiddleware {
 	return &RBACMiddleware{
 		checker: checker,
-		auth:    auth,
 	}
 }
 
@@ -48,6 +46,11 @@ func (m *RBACMiddleware) Checker() *PermissionChecker {
 
 func (m *RBACMiddleware) getPermissionFromPath(method, path string) *Permission {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	// Strip API version prefixes like "api/v1/", "api/v2/", etc.
+	if len(parts) >= 2 && parts[0] == "api" && len(parts[1]) > 0 && parts[1][0] == 'v' {
+		parts = parts[2:]
+	}
 
 	if len(parts) < 1 {
 		return nil
@@ -298,6 +301,11 @@ type PermissionRequirement struct {
 func (m *RBACMiddleware) RequirementsFromHTTPRequest(r *http.Request) []PermissionRequirement {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	requirements := make([]PermissionRequirement, 0)
+
+	// Strip API version prefixes like "api/v1/", "api/v2/", etc.
+	if len(parts) >= 2 && parts[0] == "api" && len(parts[1]) > 0 && parts[1][0] == 'v' {
+		parts = parts[2:]
+	}
 
 	if len(parts) < 1 {
 		return requirements

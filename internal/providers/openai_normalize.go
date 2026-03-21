@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"fmt"
+
 	"github.com/swarm-ai/swarm/pkg/api"
 )
 
@@ -135,12 +137,16 @@ func (n *OpenAINormalizer) NormalizeRequest(req *api.ChatRequest) (any, error) {
 	return or, nil
 }
 
+// TODO: NormalizeResponse needs real implementation to parse OpenAI API response
+// format into the standard ChatResponse struct.
 func (n *OpenAINormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error) {
-	return &api.ChatResponse{}, nil
+	return nil, fmt.Errorf("OpenAINormalizer.NormalizeResponse not yet implemented")
 }
 
+// TODO: NormalizeStreamEvent needs real implementation to parse OpenAI streaming
+// event format into the standard ChatStreamEvent struct.
 func (n *OpenAINormalizer) NormalizeStreamEvent(event any) (*api.ChatStreamEvent, error) {
-	return &api.ChatStreamEvent{}, nil
+	return nil, fmt.Errorf("OpenAINormalizer.NormalizeStreamEvent not yet implemented")
 }
 
 func (n *OpenAINormalizer) NormalizeError(err error) *ProviderError {

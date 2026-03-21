@@ -121,4 +121,17 @@ var DarkTheme = Theme{
 		MarginBottom(1),
 	ModalMessageStyle: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#a9b1d6")),
+	SidebarStyle: SidebarStyle{
+		Base: lipgloss.NewStyle().
+			Background(lipgloss.Color("#1a1b26")).
+			Foreground(lipgloss.Color("#c0caf5")),
+		Item: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#a9b1d6")).
+			Padding(0, 1),
+		Selected: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Background(lipgloss.Color("#24283b")).
+			Bold(true).
+			Padding(0, 1),
+	},
 }

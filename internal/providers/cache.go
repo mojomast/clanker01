@@ -42,8 +42,8 @@ func NewInMemoryCache(ttl time.Duration) *InMemoryCache {
 
 // Get retrieves a cached response
 func (c *InMemoryCache) Get(ctx context.Context, key string) (*api.ChatResponse, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	entry, ok := c.store[key]
 	if !ok {
@@ -51,6 +51,8 @@ func (c *InMemoryCache) Get(ctx context.Context, key string) (*api.ChatResponse,
 	}
 
 	if time.Now().After(entry.expiresAt) {
+		// Delete expired entry to prevent memory leak
+		delete(c.store, key)
 		return nil, false
 	}
 
@@ -203,7 +205,7 @@ func (p *CachedProvider) Metrics() *api.ProviderMetrics {
 func (p *CachedProvider) cacheKey(req *api.ChatRequest) string {
 	h := sha256.New()
 
-	json.NewEncoder(h).Encode(struct {
+	if err := json.NewEncoder(h).Encode(struct {
 		Model       string
 		Messages    []api.Message
 		Tools       []api.Tool
@@ -217,7 +219,10 @@ func (p *CachedProvider) cacheKey(req *api.ChatRequest) string {
 		Temperature: safeFloat64(req.Temperature),
 		TopP:        safeFloat64(req.TopP),
 		MaxTokens:   req.MaxTokens,
-	})
+	}); err != nil {
+		// Fallback to a simple key based on model and message count
+		return fmt.Sprintf("%s:%d", req.Model, len(req.Messages))
+	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

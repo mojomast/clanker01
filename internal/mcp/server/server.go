@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync/atomic"
 
 	"github.com/swarm-ai/swarm/internal/mcp"
 )
@@ -18,7 +19,7 @@ type Server struct {
 	toolRegistry     *ToolRegistry
 	transport        Transport
 	ctx              context.Context
-	initialized      bool
+	initialized      atomic.Bool
 }
 
 type Transport interface {
@@ -64,6 +65,10 @@ func (s *Server) Serve(ctx context.Context, transport Transport) error {
 				return fmt.Errorf("receive error: %w", err)
 			}
 
+			if msg == nil {
+				continue
+			}
+
 			go s.handleMessage(msg)
 		}
 	}
@@ -93,7 +98,7 @@ func (s *Server) handleMessage(msg json.RawMessage) {
 	case "initialize":
 		result, err = s.handleInitialize(msg)
 	case "initialized":
-		s.initialized = true
+		s.initialized.Store(true)
 		return
 	case "prompts/list":
 		result, err = s.HandleListPrompts(&mcp.ListPromptsRequest{})
@@ -166,8 +171,12 @@ func extractParamsFromMessage(msg json.RawMessage) (json.RawMessage, bool) {
 
 func (s *Server) handleInitialize(msg json.RawMessage) (*mcp.InitializeResult, error) {
 	var req mcp.InitializeRequest
-	if err := json.Unmarshal(msg, &req); err != nil {
-		return nil, fmt.Errorf("invalid initialize request: %w", err)
+	if params, ok := extractParamsFromMessage(msg); ok {
+		if err := json.Unmarshal(params, &req); err != nil {
+			return nil, fmt.Errorf("invalid initialize request: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("invalid initialize request: missing params")
 	}
 
 	log.Printf("Client connected: %s %s", req.ClientInfo.Name, req.ClientInfo.Version)
@@ -193,12 +202,22 @@ func (s *Server) sendSuccess(id json.RawMessage, result interface{}) {
 	}
 
 	if result != nil {
-		resultBytes, _ := json.Marshal(result)
+		resultBytes, err := json.Marshal(result)
+		if err != nil {
+			log.Printf("failed to marshal result: %v", err)
+			return
+		}
 		resp.Result = json.RawMessage(resultBytes)
 	}
 
-	msgBytes, _ := json.Marshal(resp)
-	s.transport.Send(s.ctx, json.RawMessage(msgBytes))
+	msgBytes, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("failed to marshal success response: %v", err)
+		return
+	}
+	if err := s.transport.Send(s.ctx, json.RawMessage(msgBytes)); err != nil {
+		log.Printf("failed to send success response: %v", err)
+	}
 }
 
 func (s *Server) sendError(id json.RawMessage, code int, message string) {
@@ -211,8 +230,14 @@ func (s *Server) sendError(id json.RawMessage, code int, message string) {
 		},
 	}
 
-	msgBytes, _ := json.Marshal(resp)
-	s.transport.Send(s.ctx, json.RawMessage(msgBytes))
+	msgBytes, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("failed to marshal error response: %v", err)
+		return
+	}
+	if err := s.transport.Send(s.ctx, json.RawMessage(msgBytes)); err != nil {
+		log.Printf("failed to send error response: %v", err)
+	}
 }
 
 func (s *Server) RegisterTool(tool *Tool) error {
@@ -228,7 +253,7 @@ func (s *Server) RegisterPrompt(prompt *Prompt) error {
 }
 
 func (s *Server) SendNotification(method string, params interface{}) error {
-	if !s.initialized {
+	if !s.initialized.Load() {
 		return fmt.Errorf("server not initialized")
 	}
 

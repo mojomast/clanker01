@@ -682,8 +682,8 @@ func TestServer_Config(t *testing.T) {
 
 		server.router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
+		if w.Code != http.StatusNotImplemented {
+			t.Errorf("Expected status 501, got %d", w.Code)
 		}
 
 		var response map[string]interface{}
@@ -691,8 +691,8 @@ func TestServer_Config(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		if response["valid"] != true {
-			t.Errorf("Expected valid to be true, got %v", response["valid"])
+		if response["error"] != "config validation not yet implemented" {
+			t.Errorf("Expected error message about not implemented, got %v", response["error"])
 		}
 	})
 }

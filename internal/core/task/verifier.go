@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -99,10 +100,16 @@ func (v *Verifier) checkAssertion(ctx context.Context, task *Task, a Assertion) 
 		matched, _ := regexp.MatchString(fmt.Sprint(a.Expected), fmt.Sprint(actual))
 		result.Passed = matched
 	case "schema":
-		err := v.schemaValidator.Validate(a.Expected.(map[string]any), actual)
-		result.Passed = err == nil
-		if err != nil {
-			result.Message = err.Error()
+		schemaMap, ok := a.Expected.(map[string]any)
+		if !ok {
+			result.Passed = false
+			result.Message = fmt.Sprintf("schema assertion expected map[string]any, got %T", a.Expected)
+		} else {
+			err := v.schemaValidator.Validate(schemaMap, actual)
+			result.Passed = err == nil
+			if err != nil {
+				result.Message = err.Error()
+			}
 		}
 	case "custom":
 		checker := v.customCheckers[a.Name]
@@ -197,7 +204,7 @@ func contains(container, item any) bool {
 	case string:
 		strItem, ok := item.(string)
 		if ok {
-			return contains(v, strItem)
+			return strings.Contains(v, strItem)
 		}
 	case map[string]any:
 		if subMap, ok := item.(map[string]any); ok {

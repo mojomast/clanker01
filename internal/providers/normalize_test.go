@@ -86,16 +86,18 @@ func TestAnthropicNormalizer_NormalizeResponse(t *testing.T) {
 	normalizer := &AnthropicNormalizer{}
 
 	resp, err := normalizer.NormalizeResponse(nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "not yet implemented")
 }
 
 func TestAnthropicNormalizer_NormalizeStreamEvent(t *testing.T) {
 	normalizer := &AnthropicNormalizer{}
 
 	event, err := normalizer.NormalizeStreamEvent(nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, event)
+	assert.Error(t, err)
+	assert.Nil(t, event)
+	assert.Contains(t, err.Error(), "not yet implemented")
 }
 
 func TestAnthropicNormalizer_NormalizeError(t *testing.T) {
@@ -210,16 +212,18 @@ func TestOpenAINormalizer_NormalizeResponse(t *testing.T) {
 	normalizer := &OpenAINormalizer{}
 
 	resp, err := normalizer.NormalizeResponse(nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "not yet implemented")
 }
 
 func TestOpenAINormalizer_NormalizeStreamEvent(t *testing.T) {
 	normalizer := &OpenAINormalizer{}
 
 	event, err := normalizer.NormalizeStreamEvent(nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, event)
+	assert.Error(t, err)
+	assert.Nil(t, event)
+	assert.Contains(t, err.Error(), "not yet implemented")
 }
 
 func TestOpenAINormalizer_NormalizeError(t *testing.T) {

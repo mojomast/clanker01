@@ -10,6 +10,7 @@ This document provides a detailed overview of the SWARM architecture, design dec
 - [Data Flow](#data-flow)
 - [Design Decisions](#design-decisions)
 - [Performance Considerations](#performance-considerations)
+- [Code Quality & Audit History](#code-quality--audit-history)
 
 ## System Overview
 
@@ -167,6 +168,7 @@ Agent lifecycle and execution:
 - **Role-Based Pools**: Architect, Coder, Tester, Reviewer, Researcher, Coordinator
 - **Tool Execution**: MCP connector for skill/tool calls
 - **Metrics Collection**: Tasks completed, tokens used, costs incurred
+- **Agent Registration**: Agents must be registered with the orchestrator via `RegisterAgent()` before they can receive task assignments
 
 ### Supporting Layers
 
@@ -203,7 +205,8 @@ Tiered storage architecture:
 - **Warm Store**: Redis with TTL (persistent cache)
 - **Cold Store**: PostgreSQL (long-term storage)
 - **Snapshots**: Checkpoint/restore functionality
-- **Semantic Search**: Graph-based RAG for retrieval
+- **Semantic Search**: Graph-based RAG for retrieval, using a real cosine similarity implementation for vector comparison
+- **Cross-Tier Queries**: Queries and semantic searches now search across both hot and warm stores (not just hot), ensuring results are not missed due to eviction
 
 #### LLM Providers
 
@@ -225,8 +228,10 @@ Universal provider interface:
 
 - **JWT**: Token generation and validation with multiple algorithms (HS256/384/512)
 - **mTLS**: Certificate-based authentication
-- **Session Management**: In-memory sessions with expiration and cleanup
+- **Session Management**: In-memory sessions with expiration and cleanup; session IDs use cryptographically secure generation
 - **HTTP Middleware**: Auth, session, mTLS support
+- **Pluggable Credentials**: Hardcoded credentials have been removed; authentication uses a pluggable `CredentialValidator` interface for flexible credential verification
+- **Token Revocation**: Implemented via an in-memory blacklist, allowing issued tokens to be explicitly invalidated
 
 #### RBAC Authorization
 
@@ -245,6 +250,8 @@ Universal provider interface:
 - **Distributed Tracing**: Span creation and propagation
 - **Structured Logging**: Debug, Info, Warn, Error levels with context
 - **Alerting**: Threshold-based notifications with multiple operators
+- **Request Logging**: gRPC and REST logging interceptors now capture and log request/response details (previously no-ops)
+- **Security Auditing**: Authentication failures are logged for security auditing and intrusion detection
 
 ## Data Flow
 
@@ -397,6 +404,19 @@ Universal provider interface:
 - **Graceful Degradation**: Non-critical failures don't stop system
 - **Error Recovery**: Multiple strategies (retry, reassign, decompose, escalate)
 - **Checkpointing**: Session snapshots prevent data loss
+
+## Code Quality & Audit History
+
+A comprehensive code quality audit was performed across all 11 modules in the codebase, identifying and fixing approximately 280 issues. The major categories of issues addressed include:
+
+- **Concurrency Safety**: Race conditions, deadlocks, and unsafe map/slice access under concurrent use were fixed throughout the orchestrator, context store, MCP server, security layer, and server components.
+- **Error Handling**: Silent failures, stub functions returning fake success, and unhandled errors were replaced with proper error propagation and reporting.
+- **Security**: Hardcoded credentials were removed in favor of a pluggable `CredentialValidator` interface, predictable IDs were replaced with `crypto/rand`-based generation, path traversal vulnerabilities were fixed with `filepath.EvalSymlinks`, and real token revocation was implemented.
+- **Correctness**: Inverted logic, infinite recursion, off-by-one errors, and broken algorithms (cosine similarity, glob matching) were identified and corrected.
+- **Dead Code**: Unused types, functions, variables, and constants were removed across `pkg/api`, `internal/config`, `internal/skills`, and other modules.
+- **Wiring**: Previously disconnected subsystems were properly connected — TUI keyboard handling (`q`/quit, view switching, tab cycling, help), orchestrator agent registration (`RegisterAgent`), and context store queries now search across all storage tiers.
+
+All 27 test packages pass after the fixes.
 
 ## Future Enhancements
 

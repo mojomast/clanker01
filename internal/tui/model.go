@@ -29,10 +29,9 @@ const (
 )
 
 type Model struct {
-	view         ViewID
-	previousView ViewID
-	width        int
-	height       int
+	view   ViewID
+	width  int
+	height int
 
 	sidebar Sidebar
 	header  Header
@@ -40,9 +39,6 @@ type Model struct {
 	agents     []Agent
 	tasks      []Task
 	logEntries []LogEntry
-
-	selectedAgent int
-	selectedTask  int
 
 	spinner    spinner.Model
 	loading    bool
@@ -53,6 +49,13 @@ type Model struct {
 	keymap KeyMap
 
 	modal Modal
+
+	// Error state for display in the status bar
+	lastError   string
+	errorExpiry time.Time
+
+	// Help toggle
+	showHelp bool
 }
 
 type Sidebar struct {
@@ -264,11 +267,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.tick())
 
 	case AgentListMsg:
-		m.agents = msg.Agents
+		if msg.Err != nil {
+			m.lastError = msg.Err.Error()
+			m.errorExpiry = time.Now().Add(10 * time.Second)
+		} else {
+			m.agents = msg.Agents
+		}
 		m.loading = false
 
 	case TaskListMsg:
-		m.tasks = msg.Tasks
+		if msg.Err != nil {
+			m.lastError = msg.Err.Error()
+			m.errorExpiry = time.Now().Add(10 * time.Second)
+		} else {
+			m.tasks = msg.Tasks
+		}
 
 	case LogStreamMsg:
 		m.logEntries = append(m.logEntries, msg.Entries...)
@@ -280,6 +293,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logEntries = []LogEntry{}
 
 	case ErrorMsg:
+		if msg.Err != nil {
+			m.lastError = msg.Err.Error()
+			m.errorExpiry = time.Now().Add(10 * time.Second)
+		}
 	}
 
 	var cmd tea.Cmd
@@ -296,6 +313,45 @@ func (m Model) tick() tea.Cmd {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+
+	case "1":
+		m.view = ViewDashboard
+		m.sidebar.selected = 0
+	case "2":
+		m.view = ViewAgents
+		m.sidebar.selected = 1
+	case "3":
+		m.view = ViewTasks
+		m.sidebar.selected = 2
+	case "4":
+		m.view = ViewLogs
+		m.sidebar.selected = 3
+	case "5":
+		m.view = ViewConfig
+		m.sidebar.selected = 4
+
+	case "tab":
+		// Cycle through views
+		nextIdx := (m.sidebar.selected + 1) % len(m.sidebar.items)
+		m.sidebar.selected = nextIdx
+		m.view = m.sidebar.items[nextIdx].viewID
+
+	case "?":
+		m.showHelp = !m.showHelp
+
+	case "esc":
+		if m.showHelp {
+			m.showHelp = false
+		} else if m.view == ViewAgentDetail {
+			m.view = ViewAgents
+		} else if m.view == ViewTaskDetail {
+			m.view = ViewTasks
+		}
+	}
+
 	return m, nil
 }
 

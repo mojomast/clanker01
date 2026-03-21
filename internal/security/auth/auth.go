@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/x509"
+	"fmt"
 	"net/http"
 )
 
@@ -71,6 +72,7 @@ func NewAuthMiddleware(auth Authenticator, sessionMgr SessionManager, certValida
 }
 
 // Middleware returns an HTTP middleware function
+// TODO: Replace fmt.Printf logging with structured logging (e.g., slog or zerolog)
 func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -85,6 +87,9 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
+			if err != nil {
+				fmt.Printf("[auth] mTLS authentication failed for %s: %v\n", r.RemoteAddr, err)
+			}
 		}
 
 		// Try session-based authentication
@@ -95,6 +100,9 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 				ctx = context.WithValue(ctx, UserContextKey, user)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
+			}
+			if err != nil {
+				fmt.Printf("[auth] session authentication failed for %s (session=%s): %v\n", r.RemoteAddr, sessionCookie.Value, err)
 			}
 		}
 
@@ -109,6 +117,9 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
+				if err != nil {
+					fmt.Printf("[auth] token authentication failed for %s: %v\n", r.RemoteAddr, err)
+				}
 			}
 		}
 
@@ -118,6 +129,7 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		fmt.Printf("[auth] all authentication methods failed for %s %s from %s\n", r.Method, r.URL.Path, r.RemoteAddr)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 }

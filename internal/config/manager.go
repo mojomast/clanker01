@@ -1,11 +1,14 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Manager struct {
@@ -18,6 +21,7 @@ type Manager struct {
 	reloadChan chan *Config
 	errorChan  chan error
 	stopChan   chan struct{}
+	closed     bool
 }
 
 type ManagerOptions struct {
@@ -153,11 +157,19 @@ func (m *Manager) Save() error {
 }
 
 func (m *Manager) saveYAML() error {
-	return fmt.Errorf("YAML save not yet implemented")
+	data, err := yaml.Marshal(m.config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to YAML: %w", err)
+	}
+	return os.WriteFile(m.configPath, data, 0644)
 }
 
 func (m *Manager) saveJSON() error {
-	return fmt.Errorf("JSON save not yet implemented")
+	data, err := json.MarshalIndent(m.config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to JSON: %w", err)
+	}
+	return os.WriteFile(m.configPath, data, 0644)
 }
 
 func (m *Manager) Watch() <-chan *Config {
@@ -171,6 +183,11 @@ func (m *Manager) Errors() <-chan error {
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 
 	if m.stopChan != nil {
 		close(m.stopChan)
@@ -231,7 +248,11 @@ func (m *Manager) checkConfigChange() error {
 		return fmt.Errorf("failed to stat config file: %w", err)
 	}
 
-	if info.ModTime().After(m.watcher.modTime) {
+	m.mu.RLock()
+	lastModTime := m.watcher.modTime
+	m.mu.RUnlock()
+
+	if info.ModTime().After(lastModTime) {
 		if err := m.Reload(); err != nil {
 			return fmt.Errorf("config reload failed: %w", err)
 		}

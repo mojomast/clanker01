@@ -136,18 +136,22 @@ func (s *Scheduler) ReassignTask(ctx context.Context, taskID string) error {
 
 	delete(s.assignments, taskID)
 
-	agents := s.orchestrator.GetAvailableAgentsByType(s.taskQueue.GetTask(taskID).AgentType)
+	task := s.taskQueue.GetTask(taskID)
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	agents := s.orchestrator.GetAvailableAgentsByType(task.AgentType)
 	if len(agents) == 0 {
 		return fmt.Errorf("no available agents for task: %s", taskID)
 	}
 
 	bestAgent := s.pickLeastLoaded(agents)
-	task := s.taskQueue.GetTask(taskID)
 	task.AssignedAgent = ""
 	task.Status = api.TaskStatusQueued
 
 	s.assignTask(ctx, bestAgent, task)
-	s.agentLoads[bestAgent.ID()]++
+	// Note: assignTask already increments agentLoads, so no second increment here.
 
 	return nil
 }

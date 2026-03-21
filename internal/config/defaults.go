@@ -146,3 +146,79 @@ var DefaultConfig = &Config{
 func GetDefaults() *Config {
 	return DefaultConfig
 }
+
+// applyDefaults fills in zero-value fields in the given config from DefaultConfig.
+func applyDefaults(config *Config) {
+	if config.Version == "" {
+		config.Version = DefaultConfig.Version
+	}
+	if config.Project.Name == "" {
+		config.Project.Name = DefaultConfig.Project.Name
+	}
+	if config.Project.Root == "" {
+		config.Project.Root = DefaultConfig.Project.Root
+	}
+	if config.LLM.DefaultProvider == "" {
+		config.LLM.DefaultProvider = DefaultConfig.LLM.DefaultProvider
+	}
+	if config.LLM.DefaultModel == "" {
+		config.LLM.DefaultModel = DefaultConfig.LLM.DefaultModel
+	}
+	if config.LLM.Providers == nil {
+		config.LLM.Providers = DefaultConfig.LLM.Providers
+	}
+	if config.LLM.AgentModelMapping == nil {
+		config.LLM.AgentModelMapping = DefaultConfig.LLM.AgentModelMapping
+	}
+	if config.MCP.Servers == nil {
+		config.MCP.Servers = DefaultConfig.MCP.Servers
+	}
+	if config.Agents.Defaults.Timeout.Duration == 0 {
+		config.Agents.Defaults.Timeout = DefaultConfig.Agents.Defaults.Timeout
+	}
+	if config.Agents.Defaults.MaxRetries == 0 {
+		config.Agents.Defaults.MaxRetries = DefaultConfig.Agents.Defaults.MaxRetries
+	}
+	if config.Agents.Roles == nil {
+		config.Agents.Roles = DefaultConfig.Agents.Roles
+	}
+	if config.Context.MaxTokens == 0 {
+		config.Context.MaxTokens = DefaultConfig.Context.MaxTokens
+	}
+	if config.Context.Compression.Ratio == 0 {
+		config.Context.Compression.Ratio = DefaultConfig.Context.Compression.Ratio
+	}
+	if config.Context.Retrieval.TopK == 0 {
+		config.Context.Retrieval.TopK = DefaultConfig.Context.Retrieval.TopK
+	}
+	if config.Context.Retrieval.VectorStore == "" {
+		config.Context.Retrieval.VectorStore = DefaultConfig.Context.Retrieval.VectorStore
+	}
+	if config.Context.Retrieval.EmbeddingModel == "" {
+		config.Context.Retrieval.EmbeddingModel = DefaultConfig.Context.Retrieval.EmbeddingModel
+	}
+	if config.TUI.Theme == "" {
+		config.TUI.Theme = DefaultConfig.TUI.Theme
+	}
+	if config.TUI.Layout.SplitRatio == 0 {
+		config.TUI.Layout.SplitRatio = DefaultConfig.TUI.Layout.SplitRatio
+	}
+	if config.TUI.Keybinds == nil {
+		config.TUI.Keybinds = DefaultConfig.TUI.Keybinds
+	}
+	if config.Server.GRPC.Port == 0 {
+		config.Server.GRPC.Port = DefaultConfig.Server.GRPC.Port
+	}
+	if config.Server.HTTP.Port == 0 {
+		config.Server.HTTP.Port = DefaultConfig.Server.HTTP.Port
+	}
+	if config.Security.Sandbox.Profile == "" {
+		config.Security.Sandbox.Profile = DefaultConfig.Security.Sandbox.Profile
+	}
+	if config.Security.Audit.Path == "" {
+		config.Security.Audit.Path = DefaultConfig.Security.Audit.Path
+	}
+	if config.Security.Secrets.Provider == "" {
+		config.Security.Secrets.Provider = DefaultConfig.Security.Secrets.Provider
+	}
+}

@@ -55,6 +55,8 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
 	}
 
+	applyDefaults(config)
+
 	if err := l.applyEnvOverrides(config); err != nil {
 		return nil, fmt.Errorf("failed to apply env overrides: %w", err)
 	}
@@ -84,6 +86,10 @@ func (l *Loader) LoadFromBytes(data []byte, format string) (*Config, error) {
 
 	if err := l.applyEnvOverrides(config); err != nil {
 		return nil, fmt.Errorf("failed to apply env overrides: %w", err)
+	}
+
+	if err := Validate(config); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	return config, nil
@@ -141,6 +147,9 @@ func (l *Loader) loadJSON(data []byte) (*Config, error) {
 	return config, nil
 }
 
+// applyEnvOverrides applies environment variable overrides to the config.
+// Environment override application is best-effort and doesn't fail — if an
+// env var is not set, the corresponding config field is simply left unchanged.
 func (l *Loader) applyEnvOverrides(config *Config) error {
 	if config.LLM.Providers == nil {
 		config.LLM.Providers = make(map[string]ProviderConfig)

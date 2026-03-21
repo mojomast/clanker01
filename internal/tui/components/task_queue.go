@@ -425,7 +425,16 @@ func (m *TaskQueueModel) renderOutputSection(task *tui.Task) string {
 
 func (m *TaskQueueModel) renderProgressBar(progress float64) string {
 	barWidth := m.width - 40
+	if barWidth < 1 {
+		barWidth = 1
+	}
 	filled := int(progress / 100 * float64(barWidth))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > barWidth {
+		filled = barWidth
+	}
 	empty := barWidth - filled
 
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)

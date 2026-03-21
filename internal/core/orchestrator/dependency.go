@@ -181,6 +181,9 @@ func (g *DependencyGraph) ExecutionBatches() [][]string {
 }
 
 func (g *DependencyGraph) HasCycle() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
 	visited := make(map[string]bool)
 	recStack := make(map[string]bool)
 

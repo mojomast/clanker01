@@ -173,7 +173,7 @@ func TestModelViewDashboard(t *testing.T) {
 	model.view = ViewDashboard
 
 	view := model.View()
-	assert.Contains(t, view, "Dashboard View")
+	assert.Contains(t, view, "DASHBOARD")
 	assert.Contains(t, view, "SWARM")
 }
 
@@ -185,7 +185,7 @@ func TestModelViewAgents(t *testing.T) {
 	model.view = ViewAgents
 
 	view := model.View()
-	assert.Contains(t, view, "Agents View")
+	assert.Contains(t, view, "AGENTS")
 }
 
 func TestModelViewTasks(t *testing.T) {
@@ -196,7 +196,7 @@ func TestModelViewTasks(t *testing.T) {
 	model.view = ViewTasks
 
 	view := model.View()
-	assert.Contains(t, view, "Tasks View")
+	assert.Contains(t, view, "TASK QUEUE")
 }
 
 func TestModelViewLogs(t *testing.T) {
@@ -228,7 +228,7 @@ func TestModelViewConfig(t *testing.T) {
 	model.view = ViewConfig
 
 	view := model.View()
-	assert.Contains(t, view, "Config View")
+	assert.Contains(t, view, "CONFIGURATION")
 }
 
 func TestModelViewModal(t *testing.T) {

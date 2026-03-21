@@ -326,7 +326,7 @@ func (m *LogsModel) renderLogContent() string {
 }
 
 func (m *LogsModel) renderLogEntry(entry tui.LogEntry) string {
-	timestamp := entry.Timestamp.Format("2006-01-15 15:04:05")
+	timestamp := entry.Timestamp.Format("2006-01-02 15:04:05")
 	level := m.levelString(entry.Level)
 	agentID := entry.AgentID
 	message := entry.Message

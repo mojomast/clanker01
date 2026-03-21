@@ -20,7 +20,6 @@ var (
 // mTLSConfig holds mTLS configuration
 type mTLSConfig struct {
 	CACertPath       string
-	ClientCAPath     string
 	EnableClientAuth bool
 	VerifyClientCert bool
 }
@@ -102,23 +101,20 @@ func (m *mTLSValidator) ValidateCertificate(cert *x509.Certificate) (*User, erro
 	return user, nil
 }
 
-// GetTrustedCerts returns the list of trusted CA certificates
+// GetTrustedCerts returns the list of trusted CA certificates.
+// TODO: x509.CertPool.Subjects() is deprecated and returns raw subject bytes,
+// not DER-encoded certificates. There is no public API on CertPool to enumerate
+// the full certificates it contains. To properly support this, the validator
+// should maintain its own []*x509.Certificate slice populated at construction time.
 func (m *mTLSValidator) GetTrustedCerts() []*x509.Certificate {
 	if m.caCertPool == nil {
 		return nil
 	}
 
-	var certs []*x509.Certificate
-	subjects := m.caCertPool.Subjects()
-
-	for _, subject := range subjects {
-		cert, err := x509.ParseCertificate(subject)
-		if err == nil {
-			certs = append(certs, cert)
-		}
-	}
-
-	return certs
+	// Cannot reliably reconstruct certificates from CertPool.Subjects() —
+	// those are raw subject bytes, not full DER certificates.
+	// Return an empty slice rather than silently returning incorrect data.
+	return []*x509.Certificate{}
 }
 
 // RevokeCertificate revokes a certificate by its serial number
@@ -148,7 +144,11 @@ func (m *mTLSValidator) CreateTLSConfig(certFile, keyFile string) (*tls.Config, 
 	}
 
 	if m.config.EnableClientAuth && m.caCertPool != nil {
-		config.ClientAuth = tls.VerifyClientCertIfGiven
+		if m.config.VerifyClientCert {
+			config.ClientAuth = tls.RequireAndVerifyClientCert
+		} else {
+			config.ClientAuth = tls.VerifyClientCertIfGiven
+		}
 		config.ClientCAs = m.caCertPool
 	}
 
@@ -199,9 +199,12 @@ func extractMetadataFromCert(cert *x509.Certificate) map[string]string {
 }
 
 // parseSANExtension parses Subject Alternative Name extension
+// TODO: Implement proper ASN.1 decoding of SAN extension (OID 2.5.29.17).
+// The value is a DER-encoded ASN.1 SEQUENCE of GeneralName entries.
+// Use encoding/asn1.Unmarshal to decode the structure and extract
+// dNSName, rFC822Name, uniformResourceIdentifier, etc.
+// See RFC 5280 Section 4.2.1.6 for the full specification.
 func parseSANExtension(value []byte) []string {
-	// Simplified SAN parsing - in production, use proper ASN.1 parsing
-	var sans []string
-	// This is a placeholder - real implementation would decode the ASN.1 structure
-	return sans
+	// Placeholder — real implementation requires ASN.1 decoding
+	return nil
 }

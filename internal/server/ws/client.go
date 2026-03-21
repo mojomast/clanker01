@@ -21,19 +21,20 @@ var (
 )
 
 type Client struct {
-	id       string
-	conn     *websocket.Conn
-	hub      *Hub
-	userID   string
-	send     chan *Message
-	receive  chan *Message
-	sub      *Subscription
-	mu       sync.RWMutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	closed   bool
-	lastPing time.Time
-	lastPong time.Time
+	id        string
+	conn      *websocket.Conn
+	hub       *Hub
+	userID    string
+	send      chan *Message
+	receive   chan *Message
+	sub       *Subscription
+	mu        sync.RWMutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closed    bool
+	lastPing  time.Time
+	lastPong  time.Time
+	closeOnce sync.Once
 }
 
 func NewClient(hub *Hub, conn *websocket.Conn, userID string) *Client {
@@ -120,14 +121,9 @@ func (c *Client) Disconnect() error {
 
 	c.cancel()
 
-	select {
-	case _, ok := <-c.send:
-		if ok {
-			close(c.send)
-		}
-	default:
+	c.closeOnce.Do(func() {
 		close(c.send)
-	}
+	})
 
 	if c.conn != nil {
 		if err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
@@ -150,6 +146,9 @@ func (c *Client) IsClosed() bool {
 }
 
 func (c *Client) RemoteAddr() string {
+	if c.conn == nil {
+		return ""
+	}
 	return c.conn.RemoteAddr().String()
 }
 

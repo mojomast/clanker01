@@ -6,26 +6,16 @@ import (
 
 type MessageType string
 
+// MessageType constants for agent-to-agent communication.
+// Currently only the following types are actively used. Additional message types
+// (e.g., task_status, clarification, artifact_update, etc.) can be added here
+// as the messaging system is implemented.
 const (
-	MessageTypeTaskAssignment     MessageType = "task_assignment"
-	MessageTypeTaskStatus         MessageType = "task_status"
-	MessageTypeTaskCompletion     MessageType = "task_completion"
-	MessageTypeTaskFailure        MessageType = "task_failure"
-	MessageTypeAssistanceRequest  MessageType = "assistance_request"
-	MessageTypeAssistanceResponse MessageType = "assistance_response"
-	MessageTypeClarification      MessageType = "clarification"
-	MessageTypeFeedback           MessageType = "feedback"
-	MessageTypeContextShare       MessageType = "context_share"
-	MessageTypeContextRequest     MessageType = "context_request"
-	MessageTypeArtifactUpdate     MessageType = "artifact_update"
-	MessageTypeBlockingNotice     MessageType = "blocking_notice"
-	MessageTypeDependencyReady    MessageType = "dependency_ready"
-	MessageTypeConflictDetected   MessageType = "conflict_detected"
-	MessageTypeConsensusRequest   MessageType = "consensus_request"
-	MessageTypeConsensusVote      MessageType = "consensus_vote"
-	MessageTypeHeartbeat          MessageType = "heartbeat"
-	MessageTypeStatusQuery        MessageType = "status_query"
-	MessageTypeErrorReport        MessageType = "error_report"
+	MessageTypeTaskAssignment    MessageType = "task_assignment"
+	MessageTypeAssistanceRequest MessageType = "assistance_request"
+	MessageTypeContextShare      MessageType = "context_share"
+	MessageTypeConsensusRequest  MessageType = "consensus_request"
+	MessageTypeHeartbeat         MessageType = "heartbeat"
 )
 
 type MessagePriority int

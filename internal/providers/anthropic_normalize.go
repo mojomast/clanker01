@@ -1,6 +1,9 @@
 package providers
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/swarm-ai/swarm/pkg/api"
 )
 
@@ -65,6 +68,12 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 	}
 
 	for _, msg := range req.Messages {
+		// Skip system messages - Anthropic doesn't accept "system" role in
+		// the messages array; the system prompt is set via the top-level field.
+		if msg.Role == "system" {
+			continue
+		}
+
 		am := anthropicMessage{Role: msg.Role}
 
 		switch v := msg.Content.(type) {
@@ -144,12 +153,16 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 	return ar, nil
 }
 
+// TODO: NormalizeResponse needs real implementation to parse Anthropic API response
+// format into the standard ChatResponse struct.
 func (n *AnthropicNormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error) {
-	return &api.ChatResponse{}, nil
+	return nil, fmt.Errorf("AnthropicNormalizer.NormalizeResponse not yet implemented")
 }
 
+// TODO: NormalizeStreamEvent needs real implementation to parse Anthropic streaming
+// event format into the standard ChatStreamEvent struct.
 func (n *AnthropicNormalizer) NormalizeStreamEvent(event any) (*api.ChatStreamEvent, error) {
-	return &api.ChatStreamEvent{}, nil
+	return nil, fmt.Errorf("AnthropicNormalizer.NormalizeStreamEvent not yet implemented")
 }
 
 func (n *AnthropicNormalizer) NormalizeError(err error) *ProviderError {
@@ -157,10 +170,11 @@ func (n *AnthropicNormalizer) NormalizeError(err error) *ProviderError {
 }
 
 func detectMediaType(url string) string {
-	if len(url) > 10 && url[:10] == "data:image/" {
-		for i := 10; i < len(url); i++ {
+	// "data:image/" is 11 chars, check len > 11 to have at least one char after prefix
+	if len(url) > 11 && url[:11] == "data:image/" {
+		for i := 11; i < len(url); i++ {
 			if url[i] == ';' {
-				return "image/" + url[10:i]
+				return "image/" + url[11:i]
 			}
 		}
 	}
@@ -177,7 +191,12 @@ func extractBase64(url string) string {
 }
 
 func parseJSON(s string) any {
-	return map[string]any{}
+	var result any
+	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		// If parsing fails, return the raw string wrapped in a map
+		return map[string]any{"raw": s}
+	}
+	return result
 }
 
 func toString(v any) string {

@@ -2,13 +2,28 @@ package auth
 
 import (
 	"context"
-	"crypto"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// CredentialValidator defines an interface for validating user credentials.
+// Implementations should check credentials against a user store (database, LDAP, etc.).
+type CredentialValidator interface {
+	ValidateCredentials(ctx context.Context, username, password string) (userID string, roles []string, permissions []string, err error)
+}
+
+// defaultCredentialValidator is a placeholder that always returns an error.
+type defaultCredentialValidator struct{}
+
+func (d *defaultCredentialValidator) ValidateCredentials(ctx context.Context, username, password string) (string, []string, []string, error) {
+	return "", nil, nil, errors.New("no credential validator configured")
+}
 
 var (
 	ErrInvalidToken = errors.New("invalid token")
@@ -39,7 +54,11 @@ func DefaultJWTConfig() *JWTConfig {
 
 // JWTAuthenticator implements JWT-based authentication
 type JWTAuthenticator struct {
-	config *JWTConfig
+	config              *JWTConfig
+	credentialValidator CredentialValidator
+	// revokedTokens stores revoked JTIs mapped to their expiration time.
+	// Tokens are checked against this blacklist during validation.
+	revokedTokens sync.Map // map[string]time.Time (JTI -> expiration)
 }
 
 // NewJWTAuthenticator creates a new JWT authenticator
@@ -50,7 +69,15 @@ func NewJWTAuthenticator(config *JWTConfig) (*JWTAuthenticator, error) {
 	if config.SecretKey == "" {
 		return nil, errors.New("secret key is required")
 	}
-	return &JWTAuthenticator{config: config}, nil
+	return &JWTAuthenticator{
+		config:              config,
+		credentialValidator: &defaultCredentialValidator{},
+	}, nil
+}
+
+// SetCredentialValidator sets a custom credential validator for authentication.
+func (j *JWTAuthenticator) SetCredentialValidator(v CredentialValidator) {
+	j.credentialValidator = v
 }
 
 // jwtClaims represents custom JWT claims
@@ -72,17 +99,16 @@ func (j *JWTAuthenticator) Authenticate(ctx context.Context, creds Credentials) 
 		}, nil
 	}
 
-	// In a real implementation, validate credentials against a database
-	// For now, we'll use a simple validation
-	if creds.Password != "valid_password" {
+	// Delegate credential validation to the pluggable validator
+	userID, roles, permissions, err := j.credentialValidator.ValidateCredentials(ctx, creds.Username, creds.Password)
+	if err != nil {
 		return &AuthResult{
 			Success: false,
 			Error:   "invalid credentials",
 		}, nil
 	}
 
-	userID := fmt.Sprintf("user_%s", creds.Username)
-	token, expiresAt, err := j.generateToken(userID, creds.Username, []string{"user"}, []string{"read", "write"})
+	token, expiresAt, err := j.generateToken(userID, creds.Username, roles, permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -121,6 +147,11 @@ func (j *JWTAuthenticator) ValidateToken(ctx context.Context, tokenStr string) (
 		return nil, ErrInvalidToken
 	}
 
+	// Check if the token has been revoked (blacklisted by JTI)
+	if _, revoked := j.revokedTokens.Load(claims.JTI); revoked {
+		return nil, ErrInvalidToken
+	}
+
 	return &User{
 		ID:          claims.UserID,
 		Username:    claims.Username,
@@ -149,15 +180,41 @@ func (j *JWTAuthenticator) RefreshToken(ctx context.Context, tokenStr string) (*
 	}, nil
 }
 
-// RevokeToken revokes a token (in JWT, tokens are stateless, so this would typically use a blacklist)
+// RevokeToken revokes a token by adding its JTI to the in-memory blacklist
 func (j *JWTAuthenticator) RevokeToken(ctx context.Context, tokenStr string) error {
-	// In a production system, you would add the token to a blacklist
-	// For now, we'll just validate it exists
-	_, err := j.ValidateToken(ctx, tokenStr)
+	// Parse the token to extract the JTI and expiration
+	token, err := jwt.ParseWithClaims(tokenStr, &jwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(j.config.SecretKey), nil
+	})
 	if err != nil {
-		return err
+		return ErrInvalidToken
 	}
+
+	claims, ok := token.Claims.(*jwtClaims)
+	if !ok || !token.Valid {
+		return ErrInvalidToken
+	}
+
+	// Store the JTI with its expiration time so it can be cleaned up later
+	expiration := time.Time{}
+	if claims.ExpiresAt != nil {
+		expiration = claims.ExpiresAt.Time
+	}
+	j.revokedTokens.Store(claims.JTI, expiration)
+
 	return nil
+}
+
+// CleanupRevokedTokens removes expired entries from the revoked tokens blacklist.
+// This should be called periodically to prevent unbounded memory growth.
+func (j *JWTAuthenticator) CleanupRevokedTokens() {
+	now := time.Now()
+	j.revokedTokens.Range(func(key, value interface{}) bool {
+		if exp, ok := value.(time.Time); ok && !exp.IsZero() && now.After(exp) {
+			j.revokedTokens.Delete(key)
+		}
+		return true
+	})
 }
 
 // generateToken creates a new JWT token with the given user information
@@ -165,8 +222,12 @@ func (j *JWTAuthenticator) generateToken(userID, username string, roles, permiss
 	now := time.Now()
 	expiresAt := now.Add(j.config.TokenExpiry)
 
-	// Generate unique JWT ID using timestamp and nanoseconds
-	jti := fmt.Sprintf("%s-%d-%d", userID, now.Unix(), now.UnixNano())
+	// Generate a cryptographically secure random JWT ID
+	jtiBytes := make([]byte, 16)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		return "", 0, fmt.Errorf("failed to generate JWT ID: %w", err)
+	}
+	jti := hex.EncodeToString(jtiBytes)
 
 	claims := jwtClaims{
 		UserID:      userID,
@@ -203,11 +264,4 @@ func getSigningMethod(algorithm string) jwt.SigningMethod {
 	default:
 		return jwt.SigningMethodHS256
 	}
-}
-
-// GenerateKeyPair generates an RSA key pair for asymmetric JWT signing
-func GenerateKeyPair() (crypto.PrivateKey, crypto.PublicKey, error) {
-	// This would typically generate RSA keys
-	// For simplicity in this implementation, we return nil
-	return nil, nil, errors.New("RSA key generation not implemented")
 }

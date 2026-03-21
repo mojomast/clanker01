@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 )
@@ -232,6 +234,12 @@ func (g *KnowledgeGraph) AddSession(
 	})
 }
 
+// generateID creates a unique ID using crypto/rand to avoid collision risks.
 func generateID() string {
-	return fmt.Sprintf("node_%d", time.Now().UnixNano())
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to time-based if crypto/rand fails (should not happen)
+		return fmt.Sprintf("node_%d", time.Now().UnixNano())
+	}
+	return "node_" + hex.EncodeToString(b)
 }

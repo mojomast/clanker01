@@ -129,8 +129,18 @@ func (s *FilesystemServer) isAllowed(path string) bool {
 		return false
 	}
 
+	// Resolve symlinks to prevent path traversal attacks
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return false
+	}
+
 	for _, allowed := range s.allowed {
-		if strings.HasPrefix(abs, allowed) {
+		allowedResolved, err := filepath.EvalSymlinks(allowed)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(resolved, allowedResolved) {
 			return true
 		}
 	}
@@ -216,7 +226,11 @@ func (s *FilesystemServer) listDirectory(ctx context.Context, args map[string]in
 
 	var result strings.Builder
 	for _, entry := range entries {
-		info, _ := entry.Info()
+		info, err := entry.Info()
+		if err != nil {
+			result.WriteString(fmt.Sprintf("? %s (error: %v)\n", entry.Name(), err))
+			continue
+		}
 		result.WriteString(fmt.Sprintf("%s %s\n", info.Mode(), entry.Name()))
 	}
 

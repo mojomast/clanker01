@@ -1,10 +1,12 @@
 # SWARM: Multi-Agent AI Coding Platform
 
 [![Built by GLM-4.7](https://img.shields.io/badge/built%20by-GLM--4.7-blue.svg)]
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8E.svg)]
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8E.svg)]
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]
 
 SWARM is an open-source, terminal-first multi-agent AI coding platform designed for **parallel agent execution** with specialized roles. Built on MCP (Model Context Protocol) as its universal connector, SWARM provides a modular, extensible architecture supporting **any LLM provider** with client/server capabilities for remote operation.
+
+> **Note**: SWARM is under active development. While the architecture is in place and all modules compile and pass tests, several features (remote client connection, LLM provider API calls, REST config endpoints) are stubbed and not yet functional. See ARCHITECTURE.md for details.
 
 ## 🚀 Key Features
 
@@ -100,7 +102,7 @@ swarm server start
 
 ### Prerequisites
 
-- Go 1.22 or higher
+- Go 1.24 or higher
 - Git
 - A supported LLM provider API key
 
@@ -215,12 +217,12 @@ swarm skill info --name filesystem
 swarm
 
 # TUI Keybindings:
-# q - Quit
-# Tab - Switch views
-# Arrow keys - Navigate
-# Enter - Select/Confirm
-# Ctrl+C - Cancel
-# / - Search
+# q         - Quit
+# Tab       - Cycle between views
+# 1-5       - Jump to specific view (Dashboard/Agents/Tasks/Logs/Config)
+# ?         - Show help
+# Esc       - Go back
+# Ctrl+C    - Force quit
 ```
 
 The TUI provides real-time views of:
@@ -251,6 +253,8 @@ swarm server start --tls-cert ./cert.pem --tls-key ./key.pem
 ```
 
 ### Remote Client Usage
+
+> **Note**: Remote connection (`swarm connect`) is not yet implemented and will return an error. The CLI infrastructure is in place but the actual connection logic is a TODO.
 
 Connect to a running SWARM server:
 
@@ -496,6 +500,9 @@ internal/monitoring    89.8% coverage
 - JWT token-based authentication
 - Session-based authentication with expiration
 - mTLS (mutual TLS) for enhanced security
+- Pluggable credential validation (no hardcoded credentials)
+- Token revocation via in-memory blacklist
+- Cryptographically secure token/session/entity ID generation
 
 ### Authorization
 - RBAC (Role-Based Access Control)

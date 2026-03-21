@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
@@ -106,7 +107,7 @@ func (s *SnapshotManager) CreateCheckpoint(store *TieredContextStore) (*Checkpoi
 		if currentLayer == "" {
 			continue
 		}
-		snapshot, err := store.Export(nil, currentLayer)
+		snapshot, err := store.Export(context.Background(), currentLayer)
 		if err != nil {
 			continue
 		}
@@ -135,7 +136,7 @@ func (s *SnapshotManager) RestoreCheckpoint(checkpoint *Checkpoint, store *Tiere
 		}
 
 		for _, entry := range snapshot.Entries {
-			if err := store.Set(nil, entry); err != nil {
+			if err := store.Set(context.Background(), entry); err != nil {
 				return fmt.Errorf("failed to restore entry %s: %w", entry.Key, err)
 			}
 		}

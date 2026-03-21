@@ -18,6 +18,8 @@ func NewArchitectAgent(id string, config *api.AgentConfig, provider api.LLMProvi
 }
 
 func (a *ArchitectAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add architect-specific specialization logic here (e.g., system design,
+	// architecture analysis, component decomposition) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err
@@ -38,6 +40,8 @@ func NewCoderAgent(id string, config *api.AgentConfig, provider api.LLMProvider,
 }
 
 func (a *CoderAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add coder-specific specialization logic here (e.g., code generation,
+	// refactoring, implementation tasks) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err
@@ -58,6 +62,8 @@ func NewTesterAgent(id string, config *api.AgentConfig, provider api.LLMProvider
 }
 
 func (a *TesterAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add tester-specific specialization logic here (e.g., test generation,
+	// test execution, coverage analysis) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err
@@ -78,6 +84,8 @@ func NewReviewerAgent(id string, config *api.AgentConfig, provider api.LLMProvid
 }
 
 func (a *ReviewerAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add reviewer-specific specialization logic here (e.g., code review,
+	// quality checks, feedback generation) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err
@@ -98,6 +106,8 @@ func NewResearcherAgent(id string, config *api.AgentConfig, provider api.LLMProv
 }
 
 func (a *ResearcherAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add researcher-specific specialization logic here (e.g., information
+	// gathering, analysis, summarization) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err
@@ -118,6 +128,8 @@ func NewCoordinatorAgent(id string, config *api.AgentConfig, provider api.LLMPro
 }
 
 func (a *CoordinatorAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResult, error) {
+	// TODO: Add coordinator-specific specialization logic here (e.g., task
+	// delegation, progress tracking, agent coordination) before/after base execution.
 	result, err := a.BaseAgent.Execute(ctx, task)
 	if err != nil {
 		return result, err

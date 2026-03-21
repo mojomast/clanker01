@@ -2,9 +2,32 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
+
+// testCredentialValidator is a simple validator for testing
+type testCredentialValidator struct {
+	validPassword string
+}
+
+func (v *testCredentialValidator) ValidateCredentials(ctx context.Context, username, password string) (string, []string, []string, error) {
+	if password != v.validPassword {
+		return "", nil, nil, fmt.Errorf("invalid credentials")
+	}
+	return fmt.Sprintf("user_%s", username), []string{"user"}, []string{"read", "write"}, nil
+}
+
+// newTestAuthenticator creates a JWTAuthenticator with a test credential validator
+func newTestAuthenticator(config *JWTConfig) (*JWTAuthenticator, error) {
+	auth, err := NewJWTAuthenticator(config)
+	if err != nil {
+		return nil, err
+	}
+	auth.SetCredentialValidator(&testCredentialValidator{validPassword: "valid_password"})
+	return auth, nil
+}
 
 func TestDefaultJWTConfig(t *testing.T) {
 	config := DefaultJWTConfig()
@@ -70,7 +93,7 @@ func TestJWTAuthenticator_Authenticate(t *testing.T) {
 		Audience:  "test-audience",
 	}
 
-	auth, err := NewJWTAuthenticator(config)
+	auth, err := newTestAuthenticator(config)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}
@@ -146,7 +169,7 @@ func TestJWTAuthenticator_ValidateToken(t *testing.T) {
 	config := DefaultJWTConfig()
 	config.SecretKey = "test-secret-key-12345678901234567890"
 
-	auth, err := NewJWTAuthenticator(config)
+	auth, err := newTestAuthenticator(config)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}
@@ -224,7 +247,7 @@ func TestJWTAuthenticator_RefreshToken(t *testing.T) {
 	config := DefaultJWTConfig()
 	config.SecretKey = "test-secret-key-12345678901234567890"
 
-	auth, err := NewJWTAuthenticator(config)
+	auth, err := newTestAuthenticator(config)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}
@@ -273,7 +296,7 @@ func TestJWTAuthenticator_RevokeToken(t *testing.T) {
 	config := DefaultJWTConfig()
 	config.SecretKey = "test-secret-key-12345678901234567890"
 
-	auth, err := NewJWTAuthenticator(config)
+	auth, err := newTestAuthenticator(config)
 	if err != nil {
 		t.Fatalf("Failed to create authenticator: %v", err)
 	}

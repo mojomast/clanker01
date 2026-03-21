@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sync"
 	"time"
@@ -382,7 +383,9 @@ func (af *AgentFilter) Match(agent api.Agent) bool {
 }
 
 func generateID() string {
-	return fmt.Sprintf("agent-%d", now().UnixNano())
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("agent-%x", b)
 }
 
 type timeProvider interface {

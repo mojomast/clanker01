@@ -54,25 +54,3 @@ type TaskResult struct {
 	Metrics     *TaskMetrics
 	CompletedAt time.Time
 }
-
-type TaskOptions struct {
-	AgentType    AgentType
-	Priority     int
-	MaxRetries   int
-	Timeout      time.Duration
-	Dependencies []string
-	Metadata     map[string]any
-}
-
-type ChatMessage struct {
-	Role      string
-	Content   string
-	Name      string
-	ToolCalls []ToolCall
-}
-
-type ChatChoice struct {
-	Index        int
-	Message      ChatMessage
-	FinishReason string
-}

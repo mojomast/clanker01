@@ -141,3 +141,30 @@ func (s *WarmStore) Clear() {
 		client.mu.Unlock()
 	}
 }
+
+// GetAll returns all non-expired entries from the warm store.
+func (s *WarmStore) GetAll() []*api.ContextEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if client, ok := s.client.(*mockRedisClient); ok {
+		client.mu.RLock()
+		defer client.mu.RUnlock()
+
+		var results []*api.ContextEntry
+		now := time.Now()
+		for key, data := range client.data {
+			// Skip expired entries
+			if exp, hasExp := client.ttl[key]; hasExp && now.After(exp) {
+				continue
+			}
+			var entry api.ContextEntry
+			if err := json.Unmarshal(data, &entry); err == nil {
+				results = append(results, &entry)
+			}
+		}
+		return results
+	}
+
+	return nil
+}

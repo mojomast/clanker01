@@ -64,6 +64,8 @@ func NewSessionPersistence(backend PersistenceBackend, config map[string]interfa
 		}
 	case PersistenceBackendMemory:
 	case PersistenceBackendSQLite:
+		cancel()
+		return nil, fmt.Errorf("SQLite backend not yet implemented")
 	default:
 		cancel()
 		return nil, fmt.Errorf("unknown persistence backend: %s", backend)

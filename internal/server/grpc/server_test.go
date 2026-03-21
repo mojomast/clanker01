@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,16 @@ import (
 
 	"github.com/swarm-ai/swarm/internal/security/auth"
 )
+
+// testCredValidator is a simple credential validator for grpc tests
+type testCredValidator struct{}
+
+func (v *testCredValidator) ValidateCredentials(ctx context.Context, username, password string) (string, []string, []string, error) {
+	if password != "valid_password" {
+		return "", nil, nil, fmt.Errorf("invalid credentials")
+	}
+	return fmt.Sprintf("user_%s", username), []string{"user"}, []string{"read", "write"}, nil
+}
 
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
@@ -110,6 +121,7 @@ func TestAuthFuncWithToken(t *testing.T) {
 	jwtConfig := auth.DefaultJWTConfig()
 	jwtAuth, err := auth.NewJWTAuthenticator(jwtConfig)
 	require.NoError(t, err)
+	jwtAuth.SetCredentialValidator(&testCredValidator{})
 
 	config := DefaultConfig()
 	server, err := NewServer(config, jwtAuth)

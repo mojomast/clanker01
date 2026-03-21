@@ -348,51 +348,6 @@ func TestGenerateSessionID(t *testing.T) {
 	}
 }
 
-func TestSessionToJSON(t *testing.T) {
-	session := &Session{
-		ID:        "sess123",
-		UserID:    "user123",
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(time.Hour),
-	}
-
-	jsonStr, err := SessionToJSON(session)
-	if err != nil {
-		t.Fatalf("Failed to convert session to JSON: %v", err)
-	}
-
-	if jsonStr == "" {
-		t.Error("Expected non-empty JSON string")
-	}
-}
-
-func TestSessionFromJSON(t *testing.T) {
-	session := &Session{
-		ID:        "sess123",
-		UserID:    "user123",
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(time.Hour),
-	}
-
-	jsonStr, err := SessionToJSON(session)
-	if err != nil {
-		t.Fatalf("Failed to convert session to JSON: %v", err)
-	}
-
-	recovered, err := SessionFromJSON(jsonStr)
-	if err != nil {
-		t.Fatalf("Failed to recover session from JSON: %v", err)
-	}
-
-	if recovered.ID != session.ID {
-		t.Errorf("Expected ID %s, got %s", session.ID, recovered.ID)
-	}
-
-	if recovered.UserID != session.UserID {
-		t.Errorf("Expected UserID %s, got %s", session.UserID, recovered.UserID)
-	}
-}
-
 func TestMemorySessionManager_Cleanup(t *testing.T) {
 	config := &SessionConfig{
 		SessionTimeout:  time.Millisecond * 100,

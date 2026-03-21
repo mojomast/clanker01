@@ -2,9 +2,9 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -124,8 +124,9 @@ func (m *MemorySessionManager) CreateSession(ctx context.Context, user *User) (s
 
 // GetSession retrieves a session by ID
 func (m *MemorySessionManager) GetSession(ctx context.Context, sessionID string) (*User, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Use full Lock (not RLock) because we write to session.LastAccess below
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	session, exists := m.sessions[sessionID]
 	if !exists {
@@ -257,11 +258,18 @@ func (m *MemorySessionManager) cleanup() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Collect expired session IDs first to avoid mutating the map during iteration
 	now := time.Now()
+	var expired []string
 	for sessionID, session := range m.sessions {
 		if now.After(session.ExpiresAt) {
-			m.deleteSessionLocked(sessionID)
+			expired = append(expired, sessionID)
 		}
+	}
+
+	// Delete expired sessions in a second pass
+	for _, sessionID := range expired {
+		m.deleteSessionLocked(sessionID)
 	}
 }
 
@@ -285,26 +293,12 @@ func (m *MemorySessionManager) GetSessionCount() int {
 	return count
 }
 
-// generateSessionID generates a unique session ID
+// generateSessionID generates a cryptographically secure unique session ID
 func generateSessionID() string {
-	return fmt.Sprintf("sess_%d_%d", time.Now().UnixNano(), time.Now().Unix())
-}
-
-// SessionToJSON converts a session to JSON
-func SessionToJSON(session *Session) (string, error) {
-	data, err := json.Marshal(session)
-	if err != nil {
-		return "", err
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// This should never happen with crypto/rand on a properly functioning OS
+		panic("failed to generate secure session ID: " + err.Error())
 	}
-	return string(data), nil
-}
-
-// SessionFromJSON creates a session from JSON
-func SessionFromJSON(jsonStr string) (*Session, error) {
-	var session Session
-	err := json.Unmarshal([]byte(jsonStr), &session)
-	if err != nil {
-		return nil, err
-	}
-	return &session, nil
+	return "sess_" + hex.EncodeToString(b)
 }

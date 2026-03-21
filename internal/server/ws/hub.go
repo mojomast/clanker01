@@ -291,6 +291,7 @@ func (h *Hub) handleBroadcast(broadcast *BroadcastMessage) {
 }
 
 func (h *Hub) handleError(err error) {
+	fmt.Printf("[ws-hub] error: %v\n", err)
 }
 
 func (h *Hub) cleanup() {

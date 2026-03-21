@@ -2,6 +2,7 @@ package loader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -213,7 +214,7 @@ func (l *NodeLoader) ListInstalledPackages(entrypoint string) ([]string, error) 
 
 // parseJSON parses JSON bytes into a target
 func parseJSON(data []byte, target interface{}) error {
-	return nil
+	return json.Unmarshal(data, target)
 }
 
 // GetPackageJSON returns the package.json content

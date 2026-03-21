@@ -16,6 +16,11 @@ import (
 	"github.com/swarm-ai/swarm/internal/security/auth"
 )
 
+// contextKey is a private type for context keys to avoid collisions.
+type contextKey string
+
+const startTimeKey contextKey = "startTime"
+
 type ServerConfig struct {
 	Host           string
 	Port           int
@@ -108,7 +113,7 @@ func NewServer(serverConfig *ServerConfig, appConfig *config.Config, jwtAuth *au
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = context.WithValue(ctx, "startTime", time.Now())
+	ctx = context.WithValue(ctx, startTimeKey, time.Now())
 
 	s := &Server{
 		config:    serverConfig,
@@ -252,8 +257,6 @@ func (s *Server) setupRoutes() error {
 	configRouter.HandleFunc("", s.handleUpdateConfig).Methods("PUT")
 	configRouter.HandleFunc("/validate", s.handleValidateConfig).Methods("POST")
 
-	s.router.PathPrefix("/").Handler(s.handleSwaggerUI())
-
 	return nil
 }
 
@@ -350,31 +353,4 @@ func (s *Server) respondError(w http.ResponseWriter, statusCode int, message str
 		errorResponse["details"] = err.Error()
 	}
 	s.respondJSON(w, statusCode, errorResponse)
-}
-
-func (s *Server) getUserFromRequest(r *http.Request) *auth.User {
-	user, _ := auth.GetUserFromContext(r.Context())
-	return user
-}
-
-func (s *Server) getRequestID(r *http.Request) string {
-	if id := r.Header.Get("X-Request-ID"); id != "" {
-		return id
-	}
-	return ""
-}
-
-func (s *Server) handleSwaggerUI() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/docs" {
-			s.handleDocs(w, r)
-			return
-		}
-		if r.URL.Path == "/api/v1/swagger.json" {
-			s.handleSwaggerJSON(w, r)
-			return
-		}
-
-		http.ServeFile(w, r, "/data/projects/swarm/internal/server/rest/swagger-ui.html")
-	})
 }

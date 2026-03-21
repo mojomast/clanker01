@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 type CompressionStrategy string
@@ -296,5 +297,5 @@ func estimateTokens(text string) int {
 }
 
 func currentTimeString() string {
-	return "2024-01-01T00:00:00Z"
+	return time.Now().UTC().Format(time.RFC3339)
 }

@@ -12,7 +12,7 @@ import (
 type BaseProvider struct {
 	name       string
 	models     []api.ModelInfo
-	config     *api.ProviderConfig
+	config     *api.ProviderConfig // config is stored for use when real HTTP calls are implemented
 	normalizer Normalizer
 	metrics    *api.ProviderMetrics
 	mu         sync.RWMutex
@@ -53,11 +53,13 @@ func (p *BaseProvider) Configure(config *api.ProviderConfig) error {
 	return nil
 }
 
-// Metrics returns provider metrics
+// Metrics returns a copy of provider metrics
 func (p *BaseProvider) Metrics() *api.ProviderMetrics {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.metrics
+	// Return a copy to prevent callers from mutating internal state
+	m := *p.metrics
+	return &m
 }
 
 // SupportsStreaming checks if streaming is supported
@@ -157,5 +159,6 @@ func WithCache(provider api.LLMProvider, cache Cache) api.LLMProvider {
 	return &CachedProvider{
 		provider: provider,
 		cache:    cache,
+		enabled:  true,
 	}
 }

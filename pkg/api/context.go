@@ -56,6 +56,9 @@ type ContextCallback func(event *ContextEvent)
 
 type Unsubscribe func() error
 
+// TODO: ContextEvent and ContextDelta are used by the Subscribe/notify mechanism
+// in store.go. The Delta field is not yet populated but is reserved for future
+// change-tracking support.
 type ContextEvent struct {
 	Type  string
 	Key   string

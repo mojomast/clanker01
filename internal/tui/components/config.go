@@ -322,25 +322,45 @@ func (m *ConfigModel) GetConfig() tui.Config {
 	for _, field := range m.fields {
 		switch field.Key {
 		case "api_endpoint":
-			config.APIEndpoint = field.Value.(string)
+			if v, ok := field.Value.(string); ok {
+				config.APIEndpoint = v
+			}
 		case "default_model":
-			config.DefaultModel = field.Value.(string)
+			if v, ok := field.Value.(string); ok {
+				config.DefaultModel = v
+			}
 		case "max_agents":
-			config.MaxAgents = field.Value.(int)
+			if v, ok := field.Value.(int); ok {
+				config.MaxAgents = v
+			}
 		case "task_timeout":
-			config.TaskTimeout = parseDuration(field.Value.(string))
+			if v, ok := field.Value.(string); ok {
+				config.TaskTimeout = parseDuration(v)
+			}
 		case "log_level":
-			config.LogLevel = parseLogLevel(field.Value.(string))
+			if v, ok := field.Value.(string); ok {
+				config.LogLevel = parseLogLevel(v)
+			}
 		case "temperature":
-			config.Temperature = field.Value.(float64)
+			if v, ok := field.Value.(float64); ok {
+				config.Temperature = v
+			}
 		case "max_tokens":
-			config.MaxTokens = field.Value.(int)
+			if v, ok := field.Value.(int); ok {
+				config.MaxTokens = v
+			}
 		case "retry_attempts":
-			config.RetryAttempts = field.Value.(int)
+			if v, ok := field.Value.(int); ok {
+				config.RetryAttempts = v
+			}
 		case "retry_delay":
-			config.RetryDelay = parseDuration(field.Value.(string))
+			if v, ok := field.Value.(string); ok {
+				config.RetryDelay = parseDuration(v)
+			}
 		case "refresh_rate":
-			config.RefreshRate = parseDuration(field.Value.(string))
+			if v, ok := field.Value.(string); ok {
+				config.RefreshRate = parseDuration(v)
+			}
 		}
 	}
 	return config
@@ -481,11 +501,15 @@ func (m *ConfigModel) renderField(field ConfigField, selected, editing bool) str
 	} else if field.Type == FieldNumber {
 		valueText = fmt.Sprintf("[%s___]", valueText)
 	} else if field.Type == FieldSlider {
-		valueText = fmt.Sprintf("[%.1f] %s", field.Value.(float64), m.renderSlider(field.Value.(float64), field.Min, field.Max))
+		if fval, ok := field.Value.(float64); ok {
+			valueText = fmt.Sprintf("[%.1f] %s", fval, m.renderSlider(fval, field.Min, field.Max))
+		} else {
+			valueText = "[0.0]"
+		}
 	} else if field.Type == FieldSelect {
 		valueText = fmt.Sprintf("[%s ▾]", valueText)
 	} else if field.Type == FieldBoolean {
-		if field.Value.(bool) {
+		if bval, ok := field.Value.(bool); ok && bval {
 			valueText = "[x]"
 		} else {
 			valueText = "[ ]"
@@ -499,8 +523,19 @@ func (m *ConfigModel) renderField(field ConfigField, selected, editing bool) str
 
 func (m *ConfigModel) renderSlider(value, min, max float64) string {
 	barWidth := 30
-	normalized := (value - min) / (max - min)
+	var normalized float64
+	if max == min {
+		normalized = 0
+	} else {
+		normalized = (value - min) / (max - min)
+	}
 	filled := int(normalized * float64(barWidth))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > barWidth {
+		filled = barWidth
+	}
 	empty := barWidth - filled
 
 	bar := strings.Repeat("●", filled) + strings.Repeat("○", empty)

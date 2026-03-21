@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -85,6 +86,8 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		if err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("unsupported duration type: %T", v)
 	}
 	return nil
 }
@@ -105,6 +108,8 @@ func (d *Duration) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		if err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("unsupported duration type: %T", v)
 	}
 	return nil
 }

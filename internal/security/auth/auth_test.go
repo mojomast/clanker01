@@ -21,6 +21,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 
 func TestAuthMiddleware_Middleware(t *testing.T) {
 	jwtAuth, _ := NewJWTAuthenticator(DefaultJWTConfig())
+	jwtAuth.SetCredentialValidator(&testCredentialValidator{validPassword: "valid_password"})
 	sessionMgr := NewMemorySessionManager(DefaultSessionConfig())
 	mtlsValidator, _ := NewmTLSValidator(&mTLSConfig{})
 

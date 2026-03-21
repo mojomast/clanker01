@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/swarm-ai/swarm/internal/config"
 	"github.com/swarm-ai/swarm/internal/security/auth"
+	"github.com/swarm-ai/swarm/pkg/api"
 )
 
 var upgrader = websocket.Upgrader{
@@ -222,11 +223,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) BroadcastAgentUpdate(agent interface{}, metrics interface{}, health interface{}) error {
-	return s.broadcastMgr.BroadcastAgentUpdate(nil, nil, nil)
+	// Type-assert the parameters to the expected types before passing through
+	typedAgent, _ := agent.(api.Agent)
+	typedMetrics, _ := metrics.(*api.AgentMetrics)
+	typedHealth, _ := health.(*api.AgentHealth)
+	return s.broadcastMgr.BroadcastAgentUpdate(typedAgent, typedMetrics, typedHealth)
 }
 
 func (s *Server) BroadcastTaskEvent(task interface{}, eventType string, result interface{}, err error) error {
-	return s.broadcastMgr.BroadcastTaskEvent(nil, eventType, nil, nil)
+	// Type-assert the parameters to the expected types before passing through
+	typedTask, _ := task.(*api.Task)
+	typedResult, _ := result.(*api.TaskResult)
+	return s.broadcastMgr.BroadcastTaskEvent(typedTask, eventType, typedResult, err)
 }
 
 func (s *Server) BroadcastLog(level, message, agentID, taskID string) error {

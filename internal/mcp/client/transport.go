@@ -29,6 +29,7 @@ func NewStdioTransport(command string, args []string, env map[string]string) *St
 	cmd := exec.Command(command, args...)
 
 	envList := make([]string, 0, len(env)+len(os.Environ()))
+	envList = append(envList, os.Environ()...)
 	for k, v := range env {
 		envList = append(envList, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -204,6 +205,10 @@ func (t *WebSocketTransport) Send(ctx context.Context, msg json.RawMessage) erro
 }
 
 func (t *WebSocketTransport) Receive(ctx context.Context) (json.RawMessage, error) {
+	if t.conn == nil {
+		return nil, fmt.Errorf("connection not established")
+	}
+
 	typ, data, err := t.conn.Read(ctx)
 	if err != nil {
 		return nil, err

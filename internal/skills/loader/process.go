@@ -2,10 +2,11 @@ package loader
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -134,11 +135,12 @@ func (s *ProcessSkill) Shutdown(ctx context.Context) error {
 		if s.sandbox != nil {
 			s.sandbox.StopProcess(pid)
 		} else {
+			proc := s.process.Process
 			s.process.Process.Signal(syscall.SIGTERM)
 
 			// Kill after 5 seconds
 			time.AfterFunc(5*time.Second, func() {
-				s.process.Process.Kill()
+				proc.Kill()
 			})
 		}
 		s.process = nil
@@ -226,7 +228,13 @@ func generateID() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 16)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// Fallback: use loop index to avoid blocking on error
+			b[i] = charset[i%len(charset)]
+			continue
+		}
+		b[i] = charset[n.Int64()]
 	}
 	return string(b)
 }

@@ -224,7 +224,17 @@ func (d *GitDiscovery) discoverRepo(ctx context.Context, repo GitRepoSource) ([]
 	}
 
 	skillDir := filepath.Join(cacheDir, repo.Path)
-	files, err := filepath.Glob(filepath.Join(skillDir, "**/skill.yaml"))
+
+	var files []string
+	err := filepath.WalkDir(skillDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() && filepath.Base(path) == "skill.yaml" {
+			files = append(files, path)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -400,11 +410,4 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	return 0
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

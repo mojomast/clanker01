@@ -40,7 +40,9 @@ func (rl *RateLimiter) getClientLimiter(clientIP string) *ClientLimiter {
 	rl.mu.RUnlock()
 
 	if exists {
+		rl.mu.Lock()
 		limiter.lastAccess = time.Now()
+		rl.mu.Unlock()
 		return limiter
 	}
 
@@ -241,10 +243,6 @@ func (b *byteBuffer) ReadByte() (byte, error) {
 	c := b.data[b.pos]
 	b.pos++
 	return c, nil
-}
-
-func bytesReader(data []byte) *byteBuffer {
-	return &byteBuffer{data: data}
 }
 
 func NewBytesReader(data []byte) *byteBuffer {

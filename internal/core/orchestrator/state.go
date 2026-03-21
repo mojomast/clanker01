@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -112,7 +113,45 @@ func (sm *StateManager) GetState() *OrchestratorState {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
-	return sm.currentState
+	// Return a shallow copy so callers cannot mutate the live state.
+	stateCopy := *sm.currentState
+
+	// Deep copy maps to avoid shared references
+	stateCopy.Agents = make(map[string]*AgentState, len(sm.currentState.Agents))
+	for k, v := range sm.currentState.Agents {
+		agentCopy := *v
+		stateCopy.Agents[k] = &agentCopy
+	}
+
+	stateCopy.Pools = make(map[api.AgentType]*PoolState, len(sm.currentState.Pools))
+	for k, v := range sm.currentState.Pools {
+		poolCopy := *v
+		poolCopy.Available = append([]string{}, v.Available...)
+		stateCopy.Pools[k] = &poolCopy
+	}
+
+	stateCopy.Tasks = make(map[string]*TaskState, len(sm.currentState.Tasks))
+	for k, v := range sm.currentState.Tasks {
+		taskCopy := *v
+		stateCopy.Tasks[k] = &taskCopy
+	}
+
+	if sm.currentState.Queue != nil {
+		queueCopy := *sm.currentState.Queue
+		stateCopy.Queue = &queueCopy
+	}
+
+	if sm.currentState.Context != nil {
+		ctxCopy := *sm.currentState.Context
+		stateCopy.Context = &ctxCopy
+	}
+
+	if sm.currentState.Metrics != nil {
+		metricsCopy := *sm.currentState.Metrics
+		stateCopy.Metrics = &metricsCopy
+	}
+
+	return &stateCopy
 }
 
 func (sm *StateManager) UpdateAgentState(agentID string, state *AgentState) {
@@ -192,14 +231,15 @@ func (sm *StateManager) Load() (*OrchestratorState, error) {
 
 func (sm *StateManager) CreateCheckpoint(name string) (*Checkpoint, error) {
 	sm.mu.RLock()
-	state := sm.currentState
+	// Deep copy the state so the checkpoint is independent of live state
+	stateCopy := deepCopyState(sm.currentState)
 	sm.mu.RUnlock()
 
 	checkpoint := &Checkpoint{
 		ID:        generateID(),
 		Name:      name,
 		CreatedAt: time.Now(),
-		State:     state,
+		State:     stateCopy,
 		Metadata:  make(map[string]any),
 	}
 
@@ -295,5 +335,52 @@ func (sm *StateManager) Clear() error {
 }
 
 func generateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
+// deepCopyState creates an independent deep copy of an OrchestratorState.
+func deepCopyState(src *OrchestratorState) *OrchestratorState {
+	if src == nil {
+		return nil
+	}
+
+	dst := *src
+
+	dst.Agents = make(map[string]*AgentState, len(src.Agents))
+	for k, v := range src.Agents {
+		agentCopy := *v
+		dst.Agents[k] = &agentCopy
+	}
+
+	dst.Pools = make(map[api.AgentType]*PoolState, len(src.Pools))
+	for k, v := range src.Pools {
+		poolCopy := *v
+		poolCopy.Available = append([]string{}, v.Available...)
+		dst.Pools[k] = &poolCopy
+	}
+
+	dst.Tasks = make(map[string]*TaskState, len(src.Tasks))
+	for k, v := range src.Tasks {
+		taskCopy := *v
+		dst.Tasks[k] = &taskCopy
+	}
+
+	if src.Queue != nil {
+		queueCopy := *src.Queue
+		dst.Queue = &queueCopy
+	}
+
+	if src.Context != nil {
+		ctxCopy := *src.Context
+		dst.Context = &ctxCopy
+	}
+
+	if src.Metrics != nil {
+		metricsCopy := *src.Metrics
+		dst.Metrics = &metricsCopy
+	}
+
+	return &dst
 }

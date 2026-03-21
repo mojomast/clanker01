@@ -1,15 +1,16 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
-	skillName      string
 	skillVersion   string
 	skillSource    string
 	skillOutput    string
@@ -384,7 +385,7 @@ func printSkillsTable(w io.Writer, skills []skillInfo, showDeps bool) {
 				if i > 0 {
 					fmt.Fprintf(w, ", ")
 				}
-				fmt.Fprintf(w, "%s%s", dep.Name, dep.Version)
+				fmt.Fprintf(w, "%s %s", dep.Name, dep.Version)
 			}
 			fmt.Fprintln(w)
 		}
@@ -393,43 +394,74 @@ func printSkillsTable(w io.Writer, skills []skillInfo, showDeps bool) {
 }
 
 func printSkillsJSON(w io.Writer, skills []skillInfo, showDeps bool) {
-	fmt.Fprintln(w, "[")
-	for i, s := range skills {
-		if i > 0 {
-			fmt.Fprintln(w, ",")
-		}
-		fmt.Fprintf(w, "  {\n")
-		fmt.Fprintf(w, "    \"name\": \"%s\",\n", s.Name)
-		fmt.Fprintf(w, "    \"version\": \"%s\",\n", s.Version)
-		fmt.Fprintf(w, "    \"description\": \"%s\",\n", s.Description)
-		fmt.Fprintf(w, "    \"deprecated\": %v,\n", s.Deprecated)
-		if showDeps && len(s.Dependencies) > 0 {
-			fmt.Fprintf(w, "    \"dependencies\": [\n")
-			for j, dep := range s.Dependencies {
-				fmt.Fprintf(w, "      {\"name\": \"%s\", \"version\": \"%s\"}%s\n", dep.Name, dep.Version, map[bool]string{true: ",", false: ""}[j < len(s.Dependencies)-1])
-			}
-			fmt.Fprintf(w, "    ]\n")
-		} else {
-			fmt.Fprintf(w, "    \"toolsCount\": %d\n", len(s.Tools))
-		}
-		fmt.Fprintf(w, "  }")
+	type depJSON struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
 	}
-	fmt.Fprintln(w, "\n]")
+	type skillJSON struct {
+		Name         string    `json:"name"`
+		Version      string    `json:"version"`
+		Description  string    `json:"description"`
+		Deprecated   bool      `json:"deprecated"`
+		Dependencies []depJSON `json:"dependencies,omitempty"`
+		ToolsCount   int       `json:"toolsCount,omitempty"`
+	}
+	out := make([]skillJSON, len(skills))
+	for i, s := range skills {
+		sj := skillJSON{
+			Name:        s.Name,
+			Version:     s.Version,
+			Description: s.Description,
+			Deprecated:  s.Deprecated,
+		}
+		if showDeps && len(s.Dependencies) > 0 {
+			for _, dep := range s.Dependencies {
+				sj.Dependencies = append(sj.Dependencies, depJSON{Name: dep.Name, Version: dep.Version})
+			}
+		} else {
+			sj.ToolsCount = len(s.Tools)
+		}
+		out[i] = sj
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		fmt.Fprintf(w, "error: %v\n", err)
+		return
+	}
+	fmt.Fprintln(w, string(data))
 }
 
 func printSkillsYAML(w io.Writer, skills []skillInfo, showDeps bool) {
-	for _, s := range skills {
-		fmt.Fprintf(w, "- name: %s\n", s.Name)
-		fmt.Fprintf(w, "  version: %s\n", s.Version)
-		fmt.Fprintf(w, "  description: %s\n", s.Description)
-		fmt.Fprintf(w, "  deprecated: %v\n", s.Deprecated)
+	type depYAML struct {
+		Name    string `yaml:"name"`
+		Version string `yaml:"version"`
+	}
+	type skillYAML struct {
+		Name         string    `yaml:"name"`
+		Version      string    `yaml:"version"`
+		Description  string    `yaml:"description"`
+		Deprecated   bool      `yaml:"deprecated"`
+		Dependencies []depYAML `yaml:"dependencies,omitempty"`
+	}
+	out := make([]skillYAML, len(skills))
+	for i, s := range skills {
+		sy := skillYAML{
+			Name:        s.Name,
+			Version:     s.Version,
+			Description: s.Description,
+			Deprecated:  s.Deprecated,
+		}
 		if showDeps && len(s.Dependencies) > 0 {
-			fmt.Fprintf(w, "  dependencies:\n")
 			for _, dep := range s.Dependencies {
-				fmt.Fprintf(w, "    - name: %s\n", dep.Name)
-				fmt.Fprintf(w, "      version: %s\n", dep.Version)
+				sy.Dependencies = append(sy.Dependencies, depYAML{Name: dep.Name, Version: dep.Version})
 			}
 		}
-		fmt.Fprintln(w)
+		out[i] = sy
 	}
+	data, err := yaml.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(w, "error: %v\n", err)
+		return
+	}
+	fmt.Fprint(w, string(data))
 }

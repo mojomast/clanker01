@@ -114,13 +114,14 @@ func (s *Sandbox) Run(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 	if s.config.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, s.config.Timeout)
 		defer cancel()
-		cmd = exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...)
-		cmd.Dir = cmd.Dir
-		cmd.Env = cmd.Env
-		cmd.Stdin = cmd.Stdin
-		cmd.Stdout = cmd.Stdout
-		cmd.Stderr = cmd.Stderr
-		cmd.SysProcAttr = cmd.SysProcAttr
+		oldCmd := cmd
+		cmd = exec.CommandContext(ctx, oldCmd.Path, oldCmd.Args[1:]...)
+		cmd.Dir = oldCmd.Dir
+		cmd.Env = oldCmd.Env
+		cmd.Stdin = oldCmd.Stdin
+		cmd.Stdout = oldCmd.Stdout
+		cmd.Stderr = oldCmd.Stderr
+		cmd.SysProcAttr = oldCmd.SysProcAttr
 	}
 
 	// Track process
@@ -403,42 +404,4 @@ func matchGlob(path, pattern string) bool {
 	}
 
 	return false
-}
-
-func pathHasSuffix(path, suffix string) bool {
-	if suffix == "" {
-		return true
-	}
-	if suffix[0] == '/' {
-		suffix = suffix[1:]
-	}
-	if suffix == "" {
-		return true
-	}
-
-	pathParts := splitPath(path)
-	suffixParts := splitPath(suffix)
-
-	if len(suffixParts) > len(pathParts) {
-		return false
-	}
-
-	for i := range suffixParts {
-		if suffixParts[len(suffixParts)-1-i] != pathParts[len(pathParts)-1-i] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func splitPath(path string) []string {
-	parts := filepath.SplitList(path)
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part != "" && part != string(filepath.Separator) {
-			result = append(result, part)
-		}
-	}
-	return result
 }

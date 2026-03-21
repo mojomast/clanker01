@@ -336,7 +336,7 @@ func TestNewMessageFilter(t *testing.T) {
 func TestMessageFilterAdd(t *testing.T) {
 	mf := NewMessageFilter()
 
-	mf.AddFilter(func(msg *Message) bool {
+	mf.AddFilter("log-only", func(msg *Message) bool {
 		return msg.Type == MessageTypeLog
 	})
 
@@ -350,11 +350,11 @@ func TestMessageFilterAdd(t *testing.T) {
 func TestMessageFilterMultiple(t *testing.T) {
 	mf := NewMessageFilter()
 
-	mf.AddFilter(func(msg *Message) bool {
+	mf.AddFilter("type-filter", func(msg *Message) bool {
 		return msg.Type == MessageTypeLog || msg.Type == MessageTypeError
 	})
 
-	mf.AddFilter(func(msg *Message) bool {
+	mf.AddFilter("agent-filter", func(msg *Message) bool {
 		return msg.AgentID == "agent-1"
 	})
 
@@ -368,7 +368,7 @@ func TestMessageFilterMultiple(t *testing.T) {
 func TestMessageFilterClear(t *testing.T) {
 	mf := NewMessageFilter()
 
-	mf.AddFilter(func(msg *Message) bool {
+	mf.AddFilter("log-only-2", func(msg *Message) bool {
 		return msg.Type == MessageTypeLog
 	})
 

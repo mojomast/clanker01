@@ -1,20 +1,20 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/swarm-ai/swarm/pkg/api"
+	"gopkg.in/yaml.v3"
 )
 
 var (
-	agentType      string
-	agentModel     string
-	agentName      string
-	agentOutput    string
-	showAgentStats bool
+	agentType   string
+	agentModel  string
+	agentOutput string
 )
 
 func newAgentCmd() *cobra.Command {
@@ -71,8 +71,10 @@ func runAgentList(cmd *cobra.Command, args []string) error {
 		printAgentsJSON(cmd.OutOrStdout(), agents)
 	case "yaml":
 		printAgentsYAML(cmd.OutOrStdout(), agents)
-	default:
+	case "table":
 		printAgentsTable(cmd.OutOrStdout(), agents)
+	default:
+		return fmt.Errorf("unknown output format %q: must be one of table, json, yaml", agentOutput)
 	}
 
 	return nil
@@ -107,11 +109,11 @@ func runAgentCreate(cmd *cobra.Command, args []string) error {
 	cfg := loadConfigOrDefault()
 
 	if agentModel == "" {
-		model, err := cfg.LLM.AgentModelMapping[agentType]
-		if !err {
-			agentModel = cfg.LLM.DefaultModel
-		} else {
+		model, ok := cfg.LLM.AgentModelMapping[agentType]
+		if ok {
 			agentModel = model
+		} else {
+			agentModel = cfg.LLM.DefaultModel
 		}
 	}
 
@@ -300,31 +302,57 @@ func printAgentsTable(w io.Writer, agents []agentInfo) {
 }
 
 func printAgentsJSON(w io.Writer, agents []agentInfo) {
-	fmt.Fprintln(w, "[")
-	for i, a := range agents {
-		if i > 0 {
-			fmt.Fprintln(w, ",")
-		}
-		fmt.Fprintf(w, "  {\n")
-		fmt.Fprintf(w, "    \"name\": \"%s\",\n", a.Name)
-		fmt.Fprintf(w, "    \"type\": \"%s\",\n", a.Type)
-		fmt.Fprintf(w, "    \"model\": \"%s\",\n", a.Model)
-		fmt.Fprintf(w, "    \"status\": \"%s\",\n", a.Status)
-		fmt.Fprintf(w, "    \"tasksCompleted\": %d,\n", a.TasksCompleted)
-		fmt.Fprintf(w, "    \"tasksFailed\": %d\n", a.TasksFailed)
-		fmt.Fprintf(w, "  }")
+	type agentJSON struct {
+		Name           string `json:"name"`
+		Type           string `json:"type"`
+		Model          string `json:"model"`
+		Status         string `json:"status"`
+		TasksCompleted int    `json:"tasksCompleted"`
+		TasksFailed    int    `json:"tasksFailed"`
 	}
-	fmt.Fprintln(w, "\n]")
+	out := make([]agentJSON, len(agents))
+	for i, a := range agents {
+		out[i] = agentJSON{
+			Name:           a.Name,
+			Type:           string(a.Type),
+			Model:          a.Model,
+			Status:         string(a.Status),
+			TasksCompleted: a.TasksCompleted,
+			TasksFailed:    a.TasksFailed,
+		}
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		fmt.Fprintf(w, "error: %v\n", err)
+		return
+	}
+	fmt.Fprintln(w, string(data))
 }
 
 func printAgentsYAML(w io.Writer, agents []agentInfo) {
-	for _, a := range agents {
-		fmt.Fprintf(w, "- name: %s\n", a.Name)
-		fmt.Fprintf(w, "  type: %s\n", a.Type)
-		fmt.Fprintf(w, "  model: %s\n", a.Model)
-		fmt.Fprintf(w, "  status: %s\n", a.Status)
-		fmt.Fprintf(w, "  tasksCompleted: %d\n", a.TasksCompleted)
-		fmt.Fprintf(w, "  tasksFailed: %d\n", a.TasksFailed)
-		fmt.Fprintln(w)
+	type agentYAML struct {
+		Name           string `yaml:"name"`
+		Type           string `yaml:"type"`
+		Model          string `yaml:"model"`
+		Status         string `yaml:"status"`
+		TasksCompleted int    `yaml:"tasksCompleted"`
+		TasksFailed    int    `yaml:"tasksFailed"`
 	}
+	out := make([]agentYAML, len(agents))
+	for i, a := range agents {
+		out[i] = agentYAML{
+			Name:           a.Name,
+			Type:           string(a.Type),
+			Model:          a.Model,
+			Status:         string(a.Status),
+			TasksCompleted: a.TasksCompleted,
+			TasksFailed:    a.TasksFailed,
+		}
+	}
+	data, err := yaml.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(w, "error: %v\n", err)
+		return
+	}
+	fmt.Fprint(w, string(data))
 }

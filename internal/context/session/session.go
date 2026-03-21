@@ -303,21 +303,32 @@ func (m *SessionManager) AddMessage(sessionID string, msg swarmapi.Message) erro
 	}
 
 	session.mu.Lock()
-	defer session.mu.Unlock()
 
 	session.Conversation.mu.Lock()
 	session.Conversation.Messages = append(session.Conversation.Messages, msg)
 	session.Conversation.CurrentTurn++
 	session.Conversation.TotalMessages++
+
+	// Check compression threshold while holding the conversation lock
+	// to avoid race conditions with the message count check.
+	needsCompression := len(session.Conversation.Messages) >= m.compressionThreshold
 	session.Conversation.mu.Unlock()
 
 	session.UpdatedAt = time.Now()
+	err = m.store.Update(session)
+	session.mu.Unlock()
 
-	if len(session.Conversation.Messages) >= m.compressionThreshold {
-		go m.autoCompress(sessionID)
+	if err != nil {
+		return err
 	}
 
-	return m.store.Update(session)
+	// Perform compression outside the session lock to avoid deadlock,
+	// since autoCompress acquires its own locks.
+	if needsCompression {
+		m.autoCompress(sessionID)
+	}
+
+	return nil
 }
 
 func (m *SessionManager) GetMessages(sessionID string) ([]swarmapi.Message, []*CompressedSummary, error) {

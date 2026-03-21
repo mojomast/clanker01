@@ -256,8 +256,10 @@ func (s *Skill) Meta() *loader.SkillManifest {
 }
 
 func (s *Skill) Initialize(ctx context.Context, config *loader.Config) error {
-	if timeout, ok := config.Settings["default_timeout"].(float64); ok {
-		s.client.Timeout = time.Duration(timeout) * time.Second
+	if config != nil && config.Settings != nil {
+		if timeout, ok := config.Settings["default_timeout"].(float64); ok {
+			s.client.Timeout = time.Duration(timeout) * time.Second
+		}
 	}
 	return nil
 }

@@ -190,7 +190,7 @@ func (s *Server) Start() error {
 			case <-s.ctx.Done():
 				return
 			default:
-				status.Errorf(codes.Internal, "server error: %v", err)
+				fmt.Printf("[grpc] server error: %v\n", err)
 			}
 		}
 	}()
@@ -275,10 +275,8 @@ func loggingInterceptor() grpc.UnaryServerInterceptor {
 		resp, err := handler(ctx, req)
 		duration := time.Since(start)
 
-		if err != nil {
-			_ = status.Code(err)
-			_ = duration.String()
-		}
+		code := status.Code(err)
+		fmt.Printf("[grpc] method=%s status=%s duration=%s\n", info.FullMethod, code, duration)
 
 		return resp, err
 	}
@@ -286,10 +284,13 @@ func loggingInterceptor() grpc.UnaryServerInterceptor {
 
 func streamLoggingInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
 		err := handler(srv, ss)
-		if err != nil {
-			_ = status.Code(err)
-		}
+		duration := time.Since(start)
+
+		code := status.Code(err)
+		fmt.Printf("[grpc-stream] method=%s status=%s duration=%s\n", info.FullMethod, code, duration)
+
 		return err
 	}
 }

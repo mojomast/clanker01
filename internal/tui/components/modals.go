@@ -443,7 +443,11 @@ func (m *Modal) renderField(field ModalField, focused bool) string {
 		valueText = field.Placeholder
 	}
 
-	valueRender := valueStyle.Render(fmt.Sprintf("[%s%s]", valueText, strings.Repeat("_", 25-len(valueText))))
+	padding := 25 - len(valueText)
+	if padding < 0 {
+		padding = 0
+	}
+	valueRender := valueStyle.Render(fmt.Sprintf("[%s%s]", valueText, strings.Repeat("_", padding)))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle, " ", valueRender)
 }

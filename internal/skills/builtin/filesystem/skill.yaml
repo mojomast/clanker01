@@ -1,0 +1,151 @@
+apiVersion: swarm.ai/v1
+kind: Skill
+
+metadata:
+  name: filesystem
+  version: 1.0.0
+  displayName: Filesystem Operations
+  description: Read, write, list, and search files and directories
+  author: SWARM Team
+  license: Apache-2.0
+  tags:
+    - filesystem
+    - io
+    - files
+
+spec:
+  runtime: native
+  entrypoint: builtin.filesystem
+
+  tools:
+    - name: read_file
+      description: Read the contents of a file
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the file
+          offset:
+            type: integer
+            description: Line number to start reading from (1-indexed)
+            default: 0
+          limit:
+            type: integer
+            description: Maximum number of lines to read
+            default: 0
+      returns:
+        type: object
+        properties:
+          content:
+            type: string
+          lines:
+            type: integer
+          path:
+            type: string
+
+    - name: write_file
+      description: Write content to a file
+      parameters:
+        type: object
+        required: [path, content]
+        properties:
+          path:
+            type: string
+            description: Path to the file
+          content:
+            type: string
+            description: Content to write
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          path:
+            type: string
+          size:
+            type: integer
+
+    - name: list_directory
+      description: List contents of a directory
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the directory
+          recursive:
+            type: boolean
+            default: false
+            description: List recursively
+      returns:
+        type: object
+        properties:
+          files:
+            type: array
+            items:
+              type: string
+          directories:
+            type: array
+            items:
+              type: string
+
+    - name: search_files
+      description: Search for files matching a pattern
+      parameters:
+        type: object
+        required: [pattern]
+        properties:
+          pattern:
+            type: string
+            description: Glob pattern to match
+          path:
+            type: string
+            description: Directory to search in
+      returns:
+        type: object
+        properties:
+          matches:
+            type: array
+            items:
+              type: string
+
+    - name: search_content
+      description: Search for content within files
+      parameters:
+        type: object
+        required: [pattern]
+        properties:
+          pattern:
+            type: string
+            description: Regex pattern to search for
+          path:
+            type: string
+            description: Directory to search in
+          include:
+            type: string
+            description: File pattern to include (e.g., *.go)
+      returns:
+        type: object
+        properties:
+          matches:
+            type: array
+            items:
+              type: object
+              properties:
+                file:
+                  type: string
+                line:
+                  type: integer
+                content:
+                  type: string
+
+  permissions:
+    filesystem:
+      read: ["**"]
+      write: ["**"]
+      delete: []
+    network:
+      allow: false

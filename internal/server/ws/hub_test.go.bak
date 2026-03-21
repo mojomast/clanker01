@@ -1,0 +1,391 @@
+package ws
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewHub(t *testing.T) {
+	hub := NewHub()
+
+	assert.NotNil(t, hub)
+	assert.NotNil(t, hub.clients)
+	assert.NotNil(t, hub.userClients)
+	assert.NotNil(t, hub.broadcast)
+	assert.NotNil(t, hub.register)
+	assert.NotNil(t, hub.unregister)
+	assert.NotNil(t, hub.errorChan)
+	assert.NotNil(t, hub.ctx)
+	assert.NotNil(t, hub.cancel)
+	assert.False(t, hub.IsClosed())
+}
+
+func TestHubRun(t *testing.T) {
+	hub := NewHub()
+
+	done := make(chan struct{})
+	go func() {
+		hub.Run()
+		close(done)
+	}()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	select {
+	case <-done:
+		t.Fatal("hub should not stop immediately")
+	default:
+	}
+
+	hub.Stop()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("hub did not stop")
+	}
+
+	assert.True(t, hub.IsClosed())
+}
+
+func TestHubRegister(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	assert.Equal(t, 1, hub.ClientCount())
+	assert.Equal(t, 1, hub.UserCount())
+
+	registeredClient, err := hub.GetClient(client.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, client.ID(), registeredClient.ID())
+
+	hub.Stop()
+}
+
+func TestHubUnregister(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, hub.ClientCount())
+
+	hub.Unregister(client)
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, hub.ClientCount())
+	assert.Equal(t, 0, hub.UserCount())
+
+	hub.Stop()
+}
+
+func TestHubGetClient(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	retrievedClient, err := hub.GetClient(client.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, client.ID(), retrievedClient.ID())
+
+	_, err = hub.GetClient("non-existent")
+	assert.Error(t, err)
+	assert.Equal(t, ErrClientNotFound, err)
+}
+
+func TestHubGetClientsByUser(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-1")
+	client3 := NewClient(hub, nil, "user-2")
+
+	hub.Register(client1)
+	hub.Register(client2)
+	hub.Register(client3)
+
+	time.Sleep(50 * time.Millisecond)
+
+	user1Clients := hub.GetClientsByUser("user-1")
+	assert.Len(t, user1Clients, 2)
+
+	user2Clients := hub.GetClientsByUser("user-2")
+	assert.Len(t, user2Clients, 1)
+
+	nonexistentClients := hub.GetClientsByUser("user-3")
+	assert.Len(t, nonexistentClients, 0)
+}
+
+func TestHubGetAllClients(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-2")
+	client3 := NewClient(hub, nil, "user-3")
+
+	hub.Register(client1)
+	hub.Register(client2)
+	hub.Register(client3)
+
+	time.Sleep(50 * time.Millisecond)
+
+	allClients := hub.GetAllClients()
+	assert.Len(t, allClients, 3)
+}
+
+func TestHubClientCount(t *testing.T) {
+	hub := NewHub()
+
+	assert.Equal(t, 0, hub.ClientCount())
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, hub.ClientCount())
+}
+
+func TestHubUserCount(t *testing.T) {
+	hub := NewHub()
+
+	assert.Equal(t, 0, hub.UserCount())
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-1")
+	client3 := NewClient(hub, nil, "user-2")
+
+	hub.Register(client1)
+	hub.Register(client2)
+	hub.Register(client3)
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 2, hub.UserCount())
+}
+
+func TestHubBroadcastAll(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-2")
+
+	hub.Register(client1)
+	hub.Register(client2)
+
+	time.Sleep(50 * time.Millisecond)
+
+	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
+	err := hub.BroadcastAll(msg)
+	assert.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case <-client1.send:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client1 did not receive message")
+	}
+
+	select {
+	case <-client2.send:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client2 did not receive message")
+	}
+}
+
+func TestHubBroadcastToUser(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-2")
+
+	hub.Register(client1)
+	hub.Register(client2)
+
+	time.Sleep(50 * time.Millisecond)
+
+	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
+	err := hub.BroadcastToUser(msg, "user-1")
+	assert.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case <-client1.send:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client1 did not receive message")
+	}
+
+	select {
+	case <-client2.send:
+		t.Fatal("client2 should not receive message")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestHubBroadcastToAgent(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	client.sub.AddAgentID("agent-1")
+
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
+	err := hub.BroadcastToAgent(msg, "agent-1")
+	assert.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case receivedMsg := <-client.send:
+		assert.Equal(t, msg.Type, receivedMsg.Type)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client did not receive message")
+	}
+}
+
+func TestHubBroadcastToTask(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	client.sub.AddTaskID("task-1")
+
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
+	err := hub.BroadcastToTask(msg, "task-1")
+	assert.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case receivedMsg := <-client.send:
+		assert.Equal(t, msg.Type, receivedMsg.Type)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client did not receive message")
+	}
+}
+
+func TestHubStop(t *testing.T) {
+	hub := NewHub()
+
+	err := hub.Stop()
+	assert.NoError(t, err)
+	assert.True(t, hub.IsClosed())
+
+	err = hub.Stop()
+	assert.NoError(t, err)
+}
+
+func TestHubStats(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client2 := NewClient(hub, nil, "user-2")
+
+	hub.Register(client1)
+	hub.Register(client2)
+
+	time.Sleep(50 * time.Millisecond)
+
+	stats := hub.Stats()
+	assert.NotNil(t, stats)
+	assert.Equal(t, 2, stats.ClientCount)
+	assert.Equal(t, 2, stats.UserCount)
+	assert.False(t, stats.ConnectedAt.IsZero())
+}
+
+func TestHubSendAgentUpdate(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	err := hub.SendAgentUpdate(nil, nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestHubSendTaskEvent(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	err := hub.SendTaskEvent(nil, "test", nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestHubSendLog(t *testing.T) {
+	hub := NewHub()
+
+	client := NewClient(hub, nil, "user-1")
+	hub.Register(client)
+
+	time.Sleep(50 * time.Millisecond)
+
+	err := hub.SendLog("info", "test message", "agent-1", "task-1")
+	assert.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case <-client.send:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client did not receive log message")
+	}
+}
+
+func TestHubBroadcastWithSubscription(t *testing.T) {
+	hub := NewHub()
+
+	client1 := NewClient(hub, nil, "user-1")
+	client1.sub.AddMessageType(MessageTypeLog)
+
+	client2 := NewClient(hub, nil, "user-2")
+	client2.sub.AddMessageType(MessageTypeError)
+
+	hub.Register(client1)
+	hub.Register(client2)
+
+	time.Sleep(50 * time.Millisecond)
+
+	logMsg := NewLogEntry("info", "test message", "agent-1", "task-1")
+	err := hub.BroadcastAll(logMsg)
+	require.NoError(t, err)
+
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case <-client1.send:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("client1 did not receive log message")
+	}
+
+	select {
+	case <-client2.send:
+		t.Fatal("client2 should not receive log message")
+	case <-time.After(50 * time.Millisecond):
+	}
+}

@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+package swarm.v1;
+
+option go_package = "github.com/swarm-ai/swarm/internal/server/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "common.proto";
+
+service SkillService {
+  rpc RegisterSkill(RegisterSkillRequest) returns (RegisterSkillResponse);
+  rpc GetSkill(GetSkillRequest) returns (GetSkillResponse);
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
+  rpc UpdateSkill(UpdateSkillRequest) returns (UpdateSkillResponse);
+  rpc DeleteSkill(DeleteSkillRequest) returns (google.protobuf.Empty);
+  rpc DiscoverSkills(DiscoverSkillsRequest) returns (DiscoverSkillsResponse);
+  rpc GetSkillManifest(GetSkillManifestRequest) returns (GetSkillManifestResponse);
+  rpc StreamSkillUpdates(StreamSkillUpdatesRequest) returns (stream SkillUpdate);
+}
+
+message RegisterSkillRequest {
+  SkillManifest manifest = 1;
+  string source = 2;
+}
+
+message RegisterSkillResponse {
+  Skill skill = 1;
+}
+
+message GetSkillRequest {
+  string name = 1;
+  string version = 2;
+}
+
+message GetSkillResponse {
+  Skill skill = 1;
+}
+
+message ListSkillsRequest {
+  string name = 1;
+  repeated string tags = 2;
+  bool deprecated = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListSkillsResponse {
+  repeated Skill skills = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdateSkillRequest {
+  string name = 1;
+  string version = 2;
+  SkillManifest manifest = 3;
+}
+
+message UpdateSkillResponse {
+  Skill skill = 1;
+}
+
+message DeleteSkillRequest {
+  string name = 1;
+  string version = 2;
+}
+
+message DiscoverSkillsRequest {
+  string query = 1;
+  repeated string tags = 2;
+  int32 limit = 3;
+  double min_confidence = 4;
+  map<string, string> context = 5;
+}
+
+message DiscoverSkillsResponse {
+  repeated SkillMatch matches = 1;
+}
+
+message GetSkillManifestRequest {
+  string name = 1;
+  string version = 2;
+}
+
+message GetSkillManifestResponse {
+  SkillManifest manifest = 1;
+}
+
+message StreamSkillUpdatesRequest {
+  repeated string skill_names = 1;
+}
+
+message SkillUpdate {
+  string skill_id = 1;
+  Skill skill = 2;
+  string action = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message Skill {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  string display_name = 4;
+  string description = 5;
+  string author = 6;
+  string license = 7;
+  repeated string tags = 8;
+  string icon = 9;
+  string homepage = 10;
+  string repository = 11;
+  bool deprecated = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message SkillManifest {
+  string api_version = 1;
+  string kind = 2;
+  SkillMetadata metadata = 3;
+  SkillSpec spec = 4;
+  string source = 5;
+  string file_path = 6;
+}
+
+message SkillMetadata {
+  string name = 1;
+  string version = 2;
+  string display_name = 3;
+  string description = 4;
+  string author = 5;
+  string license = 6;
+  repeated string tags = 7;
+  string icon = 8;
+  string homepage = 9;
+  string repository = 10;
+  bool deprecated = 11;
+}
+
+message SkillSpec {
+  string runtime = 1;
+  string entrypoint = 2;
+  repeated Trigger triggers = 3;
+  repeated ToolDef tools = 4;
+  Prompts prompts = 5;
+  repeated Dependency dependencies = 6;
+  Resources resources = 7;
+  Permissions permissions = 8;
+  Composition composition = 9;
+  SkillConfig config = 10;
+}
+
+message Trigger {
+  string type = 1;
+  repeated string patterns = 2;
+  double confidence = 3;
+  repeated string events = 4;
+}
+
+message ToolDef {
+  string name = 1;
+  string description = 2;
+  map<string, string> parameters = 3;
+  map<string, string> returns = 4;
+}
+
+message Prompts {
+  string system = 1;
+  repeated Example examples = 2;
+  map<string, string> context_injection = 3;
+}
+
+message Example {
+  string role = 1;
+  string content = 2;
+  map<string, string> metadata = 3;
+}
+
+message Dependency {
+  string name = 1;
+  string version = 2;
+  string source = 3;
+  bool optional = 4;
+}
+
+message Resources {
+  string cpu = 1;
+  string memory = 2;
+  int64 timeout_ms = 3;
+  string temp_storage = 4;
+}
+
+message Permissions {
+  FilesystemPermissions filesystem = 1;
+  NetworkPermissions network = 2;
+  EnvironmentPermissions environment = 3;
+}
+
+message FilesystemPermissions {
+  repeated string read = 1;
+  repeated string write = 2;
+  repeated string delete = 3;
+}
+
+message NetworkPermissions {
+  bool allow = 1;
+  repeated string allowed_hosts = 2;
+}
+
+message EnvironmentPermissions {
+  repeated string allow = 1;
+}
+
+message Composition {
+  repeated string compatible_with = 1;
+  repeated string conflicts_with = 2;
+  repeated Enhancement enhances = 3;
+}
+
+message Enhancement {
+  string skill = 1;
+  string min_version = 2;
+}
+
+message SkillConfig {
+  map<string, string> schema = 1;
+  map<string, string> ui = 2;
+}
+
+message SkillMatch {
+  string skill_id = 1;
+  double score = 2;
+  map<string, string> context = 3;
+}

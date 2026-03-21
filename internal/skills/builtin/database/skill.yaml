@@ -1,0 +1,162 @@
+apiVersion: swarm.ai/v1
+kind: Skill
+
+metadata:
+  name: database
+  version: 1.0.0
+  displayName: Database Operations
+  description: Query databases, execute statements, and manage schemas
+  author: SWARM Team
+  license: Apache-2.0
+  tags:
+    - database
+    - sql
+    - storage
+
+spec:
+  runtime: native
+  entrypoint: builtin.database
+
+  tools:
+    - name: query
+      description: Execute a SELECT query and return results
+      parameters:
+        type: object
+        required: [driver, dsn, sql]
+        properties:
+          driver:
+            type: string
+            description: Database driver (mysql, postgres, sqlite, etc.)
+          dsn:
+            type: string
+            description: Data source name/connection string
+          sql:
+            type: string
+            description: SQL query to execute
+          args:
+            type: array
+            items:
+              type: string
+            description: Query arguments for prepared statements
+      returns:
+        type: object
+        properties:
+          columns:
+            type: array
+            items:
+              type: string
+          rows:
+            type: array
+            items:
+              type: array
+          row_count:
+            type: integer
+
+    - name: execute
+      description: Execute a non-query SQL statement (INSERT, UPDATE, DELETE, etc.)
+      parameters:
+        type: object
+        required: [driver, dsn, sql]
+        properties:
+          driver:
+            type: string
+            description: Database driver (mysql, postgres, sqlite, etc.)
+          dsn:
+            type: string
+            description: Data source name/connection string
+          sql:
+            type: string
+            description: SQL statement to execute
+          args:
+            type: array
+            items:
+              type: string
+            description: Statement arguments for prepared statements
+      returns:
+        type: object
+        properties:
+          rows_affected:
+            type: integer
+          success:
+            type: boolean
+
+    - name: schema
+      description: Get database schema information
+      parameters:
+        type: object
+        required: [driver, dsn]
+        properties:
+          driver:
+            type: string
+            description: Database driver (mysql, postgres, sqlite, etc.)
+          dsn:
+            type: string
+            description: Data source name/connection string
+          table:
+            type: string
+            description: Specific table to get schema for (optional)
+      returns:
+        type: object
+        properties:
+          tables:
+            type: array
+            items:
+              type: object
+          columns:
+            type: array
+            items:
+              type: object
+
+    - name: transaction
+      description: Execute multiple statements in a transaction
+      parameters:
+        type: object
+        required: [driver, dsn, statements]
+        properties:
+          driver:
+            type: string
+            description: Database driver (mysql, postgres, sqlite, etc.)
+          dsn:
+            type: string
+            description: Data source name/connection string
+          statements:
+            type: array
+            items:
+              type: object
+              properties:
+                sql:
+                  type: string
+                args:
+                  type: array
+                  items:
+                    type: string
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          results:
+            type: array
+            items:
+              type: object
+
+  config:
+    schema:
+      type: object
+      properties:
+        default_driver:
+          type: string
+        default_dsn:
+          type: string
+        timeout:
+          type: integer
+          default: 30
+
+  permissions:
+    filesystem:
+      read: []
+      write: []
+      delete: []
+    network:
+      allow: true
+      allowed_hosts: ["*"]

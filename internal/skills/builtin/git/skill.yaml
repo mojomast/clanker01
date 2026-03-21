@@ -1,0 +1,176 @@
+apiVersion: swarm.ai/v1
+kind: Skill
+
+metadata:
+  name: git
+  version: 1.0.0
+  displayName: Git Operations
+  description: Clone repositories, check status, commit changes, and manage branches
+  author: SWARM Team
+  license: Apache-2.0
+  tags:
+    - git
+    - version-control
+    - vcs
+
+spec:
+  runtime: native
+  entrypoint: builtin.git
+
+  tools:
+    - name: clone
+      description: Clone a git repository
+      parameters:
+        type: object
+        required: [url]
+        properties:
+          url:
+            type: string
+            description: Repository URL to clone
+          path:
+            type: string
+            description: Destination directory
+          branch:
+            type: string
+            description: Specific branch to checkout
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          path:
+            type: string
+
+    - name: status
+      description: Get git repository status
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the repository
+      returns:
+        type: object
+        properties:
+          branch:
+            type: string
+          modified:
+            type: array
+            items:
+              type: string
+          added:
+            type: array
+            items:
+              type: string
+          deleted:
+            type: array
+            items:
+              type: string
+
+    - name: commit
+      description: Commit changes with a message
+      parameters:
+        type: object
+        required: [path, message]
+        properties:
+          path:
+            type: string
+            description: Path to the repository
+          message:
+            type: string
+            description: Commit message
+          files:
+            type: array
+            items:
+              type: string
+            description: Specific files to commit default all
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          hash:
+            type: string
+
+    - name: branch
+      description: Create, list, or delete branches
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the repository
+          name:
+            type: string
+            description: Branch name (for create/delete)
+          action:
+            type: string
+            enum: [list, create, delete, checkout]
+            default: list
+            description: Action to perform
+          checkout:
+            type: boolean
+            default: false
+            description: Checkout the branch after creating (for create action)
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          branches:
+            type: array
+            items:
+              type: string
+          current:
+            type: string
+
+    - name: log
+      description: View commit history
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the repository
+          limit:
+            type: integer
+            default: 10
+            description: Maximum number of commits to show
+      returns:
+        type: object
+        properties:
+          commits:
+            type: array
+            items:
+              type: object
+
+    - name: diff
+      description: Show changes between commits or working directory
+      parameters:
+        type: object
+        required: [path]
+        properties:
+          path:
+            type: string
+            description: Path to the repository
+          cached:
+            type: boolean
+            default: false
+            description: Show staged changes only
+      returns:
+        type: object
+        properties:
+          diff:
+            type: string
+
+  permissions:
+    filesystem:
+      read: ["**"]
+      write: ["**"]
+      delete: []
+    network:
+      allow: true
+      allowed_hosts: ["*"]

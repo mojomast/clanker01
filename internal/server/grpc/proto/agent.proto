@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package swarm.v1;
+
+option go_package = "github.com/swarm-ai/swarm/internal/server/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "common.proto";
+import "task.proto";
+
+service AgentService {
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse);
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse);
+  rpc DeleteAgent(DeleteAgentRequest) returns (google.protobuf.Empty);
+  rpc StartAgent(StartAgentRequest) returns (StartAgentResponse);
+  rpc StopAgent(StopAgentRequest) returns (StopAgentResponse);
+  rpc PauseAgent(PauseAgentRequest) returns (PauseAgentResponse);
+  rpc ResumeAgent(ResumeAgentRequest) returns (ResumeAgentResponse);
+  rpc ExecuteTask(ExecuteTaskRequest) returns (ExecuteTaskResponse);
+  rpc GetAgentMetrics(GetAgentMetricsRequest) returns (GetAgentMetricsResponse);
+  rpc GetAgentHealth(GetAgentHealthRequest) returns (GetAgentHealthResponse);
+  rpc StreamAgentMetrics(StreamAgentMetricsRequest) returns (stream AgentMetricUpdate);
+  rpc StreamAgentHealth(StreamAgentHealthRequest) returns (stream AgentHealthUpdate);
+}
+
+message CreateAgentRequest {
+  string id = 1;
+  AgentType type = 2;
+  string name = 3;
+  string model = 4;
+  string system_prompt = 5;
+  repeated string skills = 6;
+  int32 max_concurrent = 7;
+  int64 timeout_ms = 8;
+  int32 max_retries = 9;
+  ResourceLimits resource_limits = 10;
+}
+
+message CreateAgentResponse {
+  Agent agent = 1;
+}
+
+message GetAgentRequest {
+  string id = 1;
+}
+
+message GetAgentResponse {
+  Agent agent = 1;
+}
+
+message ListAgentsRequest {
+  AgentType type = 1;
+  AgentStatus status = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdateAgentRequest {
+  string id = 1;
+  string name = 2;
+  string system_prompt = 3;
+  repeated string skills = 4;
+}
+
+message UpdateAgentResponse {
+  Agent agent = 1;
+}
+
+message DeleteAgentRequest {
+  string id = 1;
+}
+
+message StartAgentRequest {
+  string id = 1;
+}
+
+message StartAgentResponse {
+  Agent agent = 1;
+}
+
+message StopAgentRequest {
+  string id = 1;
+}
+
+message StopAgentResponse {
+  Agent agent = 1;
+}
+
+message PauseAgentRequest {
+  string id = 1;
+}
+
+message PauseAgentResponse {
+  Agent agent = 1;
+}
+
+message ResumeAgentRequest {
+  string id = 1;
+}
+
+message ResumeAgentResponse {
+  Agent agent = 1;
+}
+
+message GetAgentMetricsRequest {
+  string id = 1;
+}
+
+message GetAgentMetricsResponse {
+  AgentMetrics metrics = 1;
+}
+
+message GetAgentHealthRequest {
+  string id = 1;
+}
+
+message GetAgentHealthResponse {
+  AgentHealth health = 1;
+}
+
+message StreamAgentMetricsRequest {
+  string agent_id = 1;
+  int64 interval_ms = 2;
+}
+
+message AgentMetricUpdate {
+  string agent_id = 1;
+  AgentMetrics metrics = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message StreamAgentHealthRequest {
+  string agent_id = 1;
+  int64 interval_ms = 2;
+}
+
+message AgentHealthUpdate {
+  string agent_id = 1;
+  AgentHealth health = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message Agent {
+  string id = 1;
+  AgentType type = 2;
+  string name = 3;
+  string model = 4;
+  AgentStatus status = 5;
+  repeated string skills = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  google.protobuf.Timestamp last_heartbeat = 9;
+}
+
+message ResourceLimits {
+  int32 max_memory_mb = 1;
+  int32 max_cpu_percent = 2;
+  int32 max_tokens_per_task = 3;
+  int32 max_tasks_per_hour = 4;
+}
+
+message AgentMetrics {
+  int64 tasks_completed = 1;
+  int64 tasks_failed = 2;
+  int64 avg_duration_ms = 3;
+  int64 total_tokens_used = 4;
+  double total_cost = 5;
+  google.protobuf.Timestamp last_activity = 6;
+}
+
+message AgentHealth {
+  string status = 1;
+  google.protobuf.Timestamp last_heartbeat = 2;
+  double cpu_usage = 3;
+  int32 memory_usage_mb = 4;
+  int32 active_requests = 5;
+  int32 error_count = 6;
+}

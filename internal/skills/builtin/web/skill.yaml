@@ -1,0 +1,193 @@
+apiVersion: swarm.ai/v1
+kind: Skill
+
+metadata:
+  name: web
+  version: 1.0.0
+  displayName: Web Operations
+  description: Fetch web content, make HTTP requests, and manage headers
+  author: SWARM Team
+  license: Apache-2.0
+  tags:
+    - web
+    - http
+    - api
+
+spec:
+  runtime: native
+  entrypoint: builtin.web
+
+  tools:
+    - name: fetch
+      description: Fetch content from a URL
+      parameters:
+        type: object
+        required: [url]
+        properties:
+          url:
+            type: string
+            description: URL to fetch
+          method:
+            type: string
+            enum: [GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS]
+            default: GET
+            description: HTTP method
+          headers:
+            type: object
+            description: Request headers
+          body:
+            type: string
+            description: Request body for POST/PUT/PATCH
+          timeout:
+            type: integer
+            default: 30
+            description: Request timeout in seconds
+          format:
+            type: string
+            enum: [text, json, html]
+            default: text
+            description: Response format
+      returns:
+        type: object
+        properties:
+          status:
+            type: integer
+          status_text:
+            type: string
+          headers:
+            type: object
+          content:
+            type: string
+          size:
+            type: integer
+
+    - name: request
+      description: Make an HTTP request with full control
+      parameters:
+        type: object
+        required: [url]
+        properties:
+          url:
+            type: string
+            description: URL to request
+          method:
+            type: string
+            enum: [GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS]
+            default: GET
+            description: HTTP method
+          headers:
+            type: object
+            description: Request headers
+          body:
+            type: string
+            description: Request body
+          query:
+            type: object
+            description: Query parameters
+          timeout:
+            type: integer
+            default: 30
+            description: Request timeout in seconds
+          follow_redirects:
+            type: boolean
+            default: true
+            description: Follow HTTP redirects
+          verify_ssl:
+            type: boolean
+            default: true
+            description: Verify SSL certificates
+      returns:
+        type: object
+        properties:
+          status:
+            type: integer
+          status_text:
+            type: string
+          headers:
+            type: object
+          content:
+            type: string
+          size:
+            type: integer
+          elapsed:
+            type: number
+
+    - name: download
+      description: Download a file from a URL
+      parameters:
+        type: object
+        required: [url, path]
+        properties:
+          url:
+            type: string
+            description: URL to download from
+          path:
+            type: string
+            description: Local path to save the file
+          timeout:
+            type: integer
+            default: 60
+            description: Download timeout in seconds
+          headers:
+            type: object
+            description: Request headers
+      returns:
+        type: object
+        properties:
+          success:
+            type: boolean
+          path:
+            type: string
+          size:
+            type: integer
+
+    - name: headers
+      description: Parse and manipulate HTTP headers
+      parameters:
+        type: object
+        required: [action]
+        properties:
+          action:
+            type: string
+            enum: [parse, format, validate]
+            description: Action to perform
+          headers:
+            type: object
+            description: Headers to process
+          raw:
+            type: string
+            description: Raw header string
+      returns:
+        type: object
+        properties:
+          result:
+            type: object
+          valid:
+            type: boolean
+          errors:
+            type: array
+            items:
+              type: string
+
+  config:
+    schema:
+      type: object
+      properties:
+        default_timeout:
+          type: integer
+          default: 30
+        user_agent:
+          type: string
+          default: "SWARM/1.0"
+        max_redirects:
+          type: integer
+          default: 10
+
+  permissions:
+    filesystem:
+      read: ["**"]
+      write: ["**"]
+      delete: []
+    network:
+      allow: true
+      allowed_hosts: ["*"]

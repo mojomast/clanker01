@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -124,19 +125,27 @@ func (s *Sandbox) Run(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 		cmd.SysProcAttr = oldCmd.SysProcAttr
 	}
 
-	// Track process
-	if cmd.Process != nil {
-		s.mu.Lock()
-		s.processes[cmd.Process.Pid] = cmd.Process
-		s.mu.Unlock()
-		defer func() {
-			s.mu.Lock()
-			delete(s.processes, cmd.Process.Pid)
-			s.mu.Unlock()
-		}()
+	// Use Start + Wait so we can track the process after it starts
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
 	}
 
-	return cmd.CombinedOutput()
+	// Track process after start, when cmd.Process is available
+	s.mu.Lock()
+	s.processes[cmd.Process.Pid] = cmd.Process
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.processes, cmd.Process.Pid)
+		s.mu.Unlock()
+	}()
+
+	err := cmd.Wait()
+	return buf.Bytes(), err
 }
 
 // StartProcess starts a process in the sandbox

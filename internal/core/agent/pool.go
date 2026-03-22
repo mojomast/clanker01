@@ -240,9 +240,7 @@ func (m *AgentPoolManager) ScalePool(ctx context.Context, agentType api.AgentTyp
 		return fmt.Errorf("target size %d above maximum %d", targetSize, pool.Config.MaxSize)
 	}
 
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
+	// Don't hold pool.mu when calling factory methods to avoid deadlock.
 	return m.factory.ScalePool(ctx, agentType, targetSize)
 }
 
@@ -261,33 +259,49 @@ func (m *AgentPoolManager) AutoScale(ctx context.Context) error {
 		total := len(pool.Agents)
 		target := pool.Config.TargetSize
 
+		var scaleUp bool
+		var scaleDownID string
+		var poolType api.AgentType
+
 		if available < 2 && total < pool.Config.MaxSize {
 			if time.Since(pool.lastScaled) >= pool.Config.ScaleUpCooldown {
-				newAgent, err := m.factory.CreateAgent(ctx, pool.Type, nil)
-				if err == nil {
-					pool.Agents[newAgent.ID()] = newAgent
-					pool.Available[newAgent.ID()] = true
-					pool.metrics.IdleAgents++
-					pool.lastScaled = time.Now()
-				}
+				scaleUp = true
+				poolType = pool.Type
 			}
 		} else if available > target && total > pool.Config.MinSize {
 			if time.Since(pool.lastScaled) >= pool.Config.ScaleDownCooldown {
 				for agentID := range pool.Agents {
 					if pool.Available[agentID] {
-						if err := m.factory.DestroyAgent(ctx, agentID); err == nil {
-							delete(pool.Agents, agentID)
-							delete(pool.Available, agentID)
-							pool.metrics.IdleAgents--
-							pool.lastScaled = time.Now()
-							break
-						}
+						scaleDownID = agentID
+						break
 					}
 				}
 			}
 		}
 
 		pool.mu.Unlock()
+
+		// Call factory methods without holding pool.mu to avoid deadlock.
+		if scaleUp {
+			newAgent, err := m.factory.CreateAgent(ctx, poolType, nil)
+			if err == nil {
+				pool.mu.Lock()
+				pool.Agents[newAgent.ID()] = newAgent
+				pool.Available[newAgent.ID()] = true
+				pool.metrics.IdleAgents++
+				pool.lastScaled = time.Now()
+				pool.mu.Unlock()
+			}
+		} else if scaleDownID != "" {
+			if err := m.factory.DestroyAgent(ctx, scaleDownID); err == nil {
+				pool.mu.Lock()
+				delete(pool.Agents, scaleDownID)
+				delete(pool.Available, scaleDownID)
+				pool.metrics.IdleAgents--
+				pool.lastScaled = time.Now()
+				pool.mu.Unlock()
+			}
+		}
 	}
 
 	return nil

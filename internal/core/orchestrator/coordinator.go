@@ -116,6 +116,9 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		return fmt.Errorf("orchestrator already running")
 	}
 
+	// Recreate stopCh so Start/Stop/Start cycles don't panic on a closed channel.
+	o.stopCh = make(chan struct{})
+
 	if _, err := o.stateManager.Load(); err != nil {
 		return fmt.Errorf("load state: %w", err)
 	}

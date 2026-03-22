@@ -93,6 +93,11 @@ func (a *BaseAgent) Start(ctx context.Context) error {
 		a.mu.Unlock()
 		return fmt.Errorf("agent not ready: %s", a.status)
 	}
+	if err := a.stateMachine.Transition(api.AgentStatusReady, api.AgentStatusRunning); err != nil {
+		a.mu.Unlock()
+		return fmt.Errorf("state transition failed: %w", err)
+	}
+	a.status = api.AgentStatusRunning
 	a.mu.Unlock()
 
 	go a.messageLoop(ctx)
@@ -177,7 +182,26 @@ func (a *BaseAgent) Execute(ctx context.Context, task *api.Task) (*api.AgentResu
 
 	defer func() {
 		a.mu.Lock()
-		a.status = api.AgentStatusReady
+		if a.status == api.AgentStatusError {
+			// Try to recover from Error to Ready via the state machine.
+			if err := a.stateMachine.Transition(api.AgentStatusError, api.AgentStatusReady); err != nil {
+				// Transition failed; leave in Error state.
+				a.currentTask = nil
+				a.health.ActiveRequests--
+				a.mu.Unlock()
+				return
+			}
+			a.status = api.AgentStatusReady
+		} else {
+			// Normal completion: transition from Running to Ready.
+			if err := a.stateMachine.Transition(api.AgentStatusRunning, api.AgentStatusReady); err != nil {
+				a.currentTask = nil
+				a.health.ActiveRequests--
+				a.mu.Unlock()
+				return
+			}
+			a.status = api.AgentStatusReady
+		}
 		a.currentTask = nil
 		a.health.Status = "ready"
 		a.health.ActiveRequests--
@@ -398,8 +422,11 @@ func (a *BaseAgent) executeToolCall(ctx context.Context, toolCall api.ToolCall) 
 func (a *BaseAgent) handleError(ctx context.Context, err error) {
 	a.mu.Lock()
 	a.health.ErrorCount++
-	a.status = api.AgentStatusError
-	a.health.Status = "error"
+	// Transition the state machine to Error so it stays in sync with a.status.
+	if smErr := a.stateMachine.Transition(api.AgentStatusRunning, api.AgentStatusError); smErr == nil {
+		a.status = api.AgentStatusError
+		a.health.Status = "error"
+	}
 	a.mu.Unlock()
 }
 

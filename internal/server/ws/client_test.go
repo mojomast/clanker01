@@ -142,7 +142,7 @@ func TestExtractUserIDFromRequest(t *testing.T) {
 	req = httptest.NewRequest("GET", "/ws", nil)
 	req.Header.Set("Authorization", "Bearer token-456")
 	userID = ExtractUserIDFromRequest(req)
-	assert.Equal(t, "token-456", userID)
+	assert.Empty(t, userID) // Bearer tokens should not be used as user IDs; must be validated first
 
 	req = httptest.NewRequest("GET", "/ws", nil)
 	req.Header.Set("Authorization", "Bearer")

@@ -251,7 +251,6 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	agentInfo.UpdatedAt = time.Now()
-	s.mu.Unlock()
 
 	response := &AgentResponse{
 		ID:        agentInfo.ID,
@@ -263,6 +262,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Config:    agentInfo.Config,
 		Metrics:   agentInfo.Metrics,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -299,7 +299,6 @@ func (s *Server) handleStartAgent(w http.ResponseWriter, r *http.Request) {
 
 	agentInfo.Status = string(api.AgentStatusRunning)
 	agentInfo.UpdatedAt = time.Now()
-	s.mu.Unlock()
 
 	response := &AgentResponse{
 		ID:        agentInfo.ID,
@@ -311,6 +310,7 @@ func (s *Server) handleStartAgent(w http.ResponseWriter, r *http.Request) {
 		Config:    agentInfo.Config,
 		Metrics:   agentInfo.Metrics,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -329,7 +329,6 @@ func (s *Server) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 
 	agentInfo.Status = string(api.AgentStatusTerminated)
 	agentInfo.UpdatedAt = time.Now()
-	s.mu.Unlock()
 
 	response := &AgentResponse{
 		ID:        agentInfo.ID,
@@ -341,6 +340,7 @@ func (s *Server) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 		Config:    agentInfo.Config,
 		Metrics:   agentInfo.Metrics,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -359,7 +359,6 @@ func (s *Server) handlePauseAgent(w http.ResponseWriter, r *http.Request) {
 
 	agentInfo.Status = string(api.AgentStatusPaused)
 	agentInfo.UpdatedAt = time.Now()
-	s.mu.Unlock()
 
 	response := &AgentResponse{
 		ID:        agentInfo.ID,
@@ -371,6 +370,7 @@ func (s *Server) handlePauseAgent(w http.ResponseWriter, r *http.Request) {
 		Config:    agentInfo.Config,
 		Metrics:   agentInfo.Metrics,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -389,7 +389,6 @@ func (s *Server) handleResumeAgent(w http.ResponseWriter, r *http.Request) {
 
 	agentInfo.Status = string(api.AgentStatusReady)
 	agentInfo.UpdatedAt = time.Now()
-	s.mu.Unlock()
 
 	response := &AgentResponse{
 		ID:        agentInfo.ID,
@@ -401,6 +400,7 @@ func (s *Server) handleResumeAgent(w http.ResponseWriter, r *http.Request) {
 		Config:    agentInfo.Config,
 		Metrics:   agentInfo.Metrics,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -546,7 +546,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	if req.Metadata != nil {
 		taskInfo.Metadata = req.Metadata
 	}
-	s.mu.Unlock()
 
 	response := &TaskResponse{
 		ID:            taskInfo.ID,
@@ -563,6 +562,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		RetryCount:    taskInfo.RetryCount,
 		Metadata:      taskInfo.Metadata,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -600,7 +600,6 @@ func (s *Server) handleStartTask(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	taskInfo.Status = string(api.TaskStatusRunning)
 	taskInfo.StartedAt = &now
-	s.mu.Unlock()
 
 	response := &TaskResponse{
 		ID:            taskInfo.ID,
@@ -614,6 +613,7 @@ func (s *Server) handleStartTask(w http.ResponseWriter, r *http.Request) {
 		RetryCount:    taskInfo.RetryCount,
 		Metadata:      taskInfo.Metadata,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -631,7 +631,6 @@ func (s *Server) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskInfo.Status = string(api.TaskStatusCancelled)
-	s.mu.Unlock()
 
 	response := &TaskResponse{
 		ID:            taskInfo.ID,
@@ -645,6 +644,7 @@ func (s *Server) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 		RetryCount:    taskInfo.RetryCount,
 		Metadata:      taskInfo.Metadata,
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -762,7 +762,6 @@ func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	if req.Config != nil {
 		skillInfo.Config = req.Config
 	}
-	s.mu.Unlock()
 
 	response := &SkillResponse{
 		ID:          skillInfo.ID,
@@ -774,6 +773,7 @@ func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 		Config:      skillInfo.Config,
 		Tools:       []ToolInfo{},
 	}
+	s.mu.Unlock()
 
 	s.respondJSON(w, http.StatusOK, response)
 }

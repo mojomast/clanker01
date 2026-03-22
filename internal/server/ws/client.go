@@ -288,14 +288,8 @@ func ExtractUserIDFromRequest(r *http.Request) string {
 		return sessionCookie.Value
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader != "" {
-		const prefix = "Bearer "
-		if len(authHeader) > len(prefix) && authHeader[:len(prefix)] == prefix {
-			return authHeader[len(prefix):]
-		}
-	}
-
+	// Do not use raw Bearer tokens as user IDs; tokens should be
+	// validated and claims extracted via proper auth middleware.
 	return ""
 }
 

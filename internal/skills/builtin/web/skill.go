@@ -443,6 +443,29 @@ func (s *Skill) download(ctx context.Context, args map[string]interface{}) (*loa
 		return &loader.Result{Success: false, Error: "path is required"}, nil
 	}
 
+	// Sanitize path to prevent path traversal attacks.
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return &loader.Result{Success: false, Error: "failed to determine working directory"}, nil
+		}
+		path = filepath.Join(cwd, path)
+	}
+	// Reject any path that still contains ".." components after cleaning.
+	if strings.Contains(path, "..") {
+		return &loader.Result{Success: false, Error: "path contains invalid traversal components"}, nil
+	}
+	// Ensure the resolved path is within the current working directory.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return &loader.Result{Success: false, Error: "failed to determine working directory"}, nil
+	}
+	cwdPrefix := filepath.Clean(cwd) + string(filepath.Separator)
+	if !strings.HasPrefix(path, cwdPrefix) && path != filepath.Clean(cwd) {
+		return &loader.Result{Success: false, Error: "path must be within the current working directory"}, nil
+	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return &loader.Result{Success: false, Error: err.Error()}, nil
 	}

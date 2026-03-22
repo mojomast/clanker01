@@ -1,7 +1,6 @@
 package session
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -235,14 +234,9 @@ func (rm *RecoveryManager) RestoreCompressedSummary(session *Session, summaryID 
 
 	for _, summary := range session.Conversation.CompressedSummaries {
 		if summary.ID == summaryID {
-			expanded, err := rm.compressor.Compress(context.Background(), summary.Content, 10000)
-			if err != nil {
-				return fmt.Errorf("failed to expand summary: %w", err)
-			}
-
 			session.Conversation.Messages = append(session.Conversation.Messages, swarmapi.Message{
 				Role:    "system",
-				Content: expanded,
+				Content: summary.Content,
 			})
 			return nil
 		}

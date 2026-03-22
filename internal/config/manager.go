@@ -221,10 +221,10 @@ func (m *Manager) Close() error {
 		m.reloadChan = nil
 	}
 
-	if m.errorChan != nil {
-		close(m.errorChan)
-		m.errorChan = nil
-	}
+	// errorChan is intentionally NOT closed here. The watchLoop goroutine may
+	// still be draining and could send on a closed channel, causing a panic.
+	// The stopChan close above signals the goroutine to exit; errorChan will
+	// be garbage collected once all references are gone.
 
 	if m.watcher != nil && m.watcher.stopChan != nil {
 		close(m.watcher.stopChan)
@@ -244,11 +244,12 @@ func (m *Manager) startWatcher() error {
 }
 
 func (m *Manager) watchLoop() {
-	// Capture the watcher's stopChan under lock before entering the loop.
-	// Close() may set m.watcher = nil, so reading m.watcher.stopChan in the
-	// select would race with Close().
+	// Capture channel references under lock before entering the loop.
+	// Close() may set m.watcher = nil and m.stopChan = nil, so reading
+	// these fields in the select would race with Close().
 	m.mu.RLock()
 	watcherStop := m.watcher.stopChan
+	stopChan := m.stopChan
 	m.mu.RUnlock()
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -257,7 +258,7 @@ func (m *Manager) watchLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			if err := m.checkConfigChange(); err != nil && m.errorChan != nil {
+			if err := m.checkConfigChange(); err != nil {
 				select {
 				case m.errorChan <- err:
 				default:
@@ -265,7 +266,7 @@ func (m *Manager) watchLoop() {
 			}
 		case <-watcherStop:
 			return
-		case <-m.stopChan:
+		case <-stopChan:
 			return
 		}
 	}

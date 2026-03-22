@@ -1,12 +1,12 @@
 # SWARM: Multi-Agent AI Coding Platform
 
-[![Built by GLM-4.7](https://img.shields.io/badge/built%20by-GLM--4.7-blue.svg)]
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8E.svg)]
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]
+[![Built by GLM-4.7](https://img.shields.io/badge/built%20by-GLM--4.7-blue.svg)](https://github.com/THUDM)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8.svg)](https://go.dev/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 SWARM is an open-source, terminal-first multi-agent AI coding platform designed for **parallel agent execution** with specialized roles. Built on MCP (Model Context Protocol) as its universal connector, SWARM provides a modular, extensible architecture supporting **any LLM provider** with client/server capabilities for remote operation.
 
-> **Note**: SWARM is under active development. While the architecture is in place and all modules compile and pass tests, several features (remote client connection, LLM provider API calls, REST config endpoints) are stubbed and not yet functional. See ARCHITECTURE.md for details.
+> **Note**: SWARM is under active development. The architecture is fully wired and all core features — including LLM provider API calls (Anthropic and OpenAI with SSE streaming), remote client connection, REST config endpoints, task planning/verification, and the orchestrator — are implemented and functional. See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## 🚀 Key Features
 
@@ -95,7 +95,7 @@ swarm init
 swarm
 
 # Or start as a server
-swarm server start
+swarm serve
 ```
 
 ## 📦 Installation
@@ -238,13 +238,13 @@ Start SWARM as a server for remote access:
 
 ```bash
 # Start with default settings
-swarm server start
+swarm serve
 
 # Start with custom configuration
-swarm server start --config ./config.yaml
+swarm serve --config ./config.yaml
 
 # Start with TLS
-swarm server start --tls-cert ./cert.pem --tls-key ./key.pem
+swarm serve --tls-cert ./cert.pem --tls-key ./key.pem
 
 # Server will listen on:
 # - gRPC: :8080
@@ -253,8 +253,6 @@ swarm server start --tls-cert ./cert.pem --tls-key ./key.pem
 ```
 
 ### Remote Client Usage
-
-> **Note**: Remote connection (`swarm connect`) is not yet implemented and will return an error. The CLI infrastructure is in place but the actual connection logic is a TODO.
 
 Connect to a running SWARM server:
 
@@ -465,34 +463,22 @@ go tool cover -html=coverage.html coverage.out
 go test ./internal/core/agent -run TestAgentExecute -v
 ```
 
-## 📊 Test Coverage
+## Test Coverage
 
+To generate and view test coverage:
+
+```bash
+# Run all tests with coverage
+go test -coverprofile=coverage.out ./...
+
+# View HTML coverage report
+go tool cover -html=coverage.out -o coverage.html
+
+# View per-package coverage summary
+go tool cover -func=coverage.out
 ```
-cmd/swarm/internal        81.2% coverage
-internal/config          50.1% coverage
-internal/context/knowledge 83.0% coverage
-internal/context/session  69.4% coverage
-internal/context/store   68.2% coverage
-internal/core/agent     56.3% coverage
-internal/core/orchestrator 64.5% coverage
-internal/core/task     86.5% coverage
-internal/mcp           All tests passing
-internal/mcp/client    26.0% coverage
-internal/mcp/server    46.2% coverage
-internal/providers      69.3% coverage
-internal/security/auth   86.0% coverage
-internal/security/rbac   83.2% coverage
-internal/server/grpc    55.6% coverage
-internal/server/rest    56.8% coverage
-internal/server/ws      78.2% coverage
-internal/skills/builtin/filesystem 90.7% coverage
-internal/skills/builtin/git 77.2% coverage
-internal/skills/loader  26.9% coverage
-internal/skills/registry 73.0% coverage
-internal/tui           89.1% coverage
-internal/tui/components 72.4% coverage
-internal/monitoring    89.8% coverage
-```
+
+Run `go test -cover ./...` to see current per-package coverage numbers.
 
 ## 🔒 Security
 

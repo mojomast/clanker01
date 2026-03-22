@@ -202,11 +202,15 @@ func (s *Scheduler) ReassignTask(ctx context.Context, taskID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.assignments[taskID]
+	oldAgentID, ok := s.assignments[taskID]
 	if !ok {
 		return fmt.Errorf("task not assigned: %s", taskID)
 	}
 
+	// Decrement the old agent's load before removing the assignment.
+	if oldAgentID != "" {
+		s.agentLoads[oldAgentID]--
+	}
 	delete(s.assignments, taskID)
 
 	task := s.taskQueue.GetTask(taskID)

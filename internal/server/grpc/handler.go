@@ -26,22 +26,27 @@ func NewAgentHandler(server *Server) *AgentHandler {
 }
 
 func (h *AgentHandler) CreateAgent(ctx context.Context, req *proto.CreateAgentRequest) (*proto.CreateAgentResponse, error) {
-	_ = &api.AgentConfig{
-		ID:            req.Id,
-		Type:          api.AgentType(req.Type.String()),
-		Name:          req.Name,
-		Model:         req.Model,
-		SystemPrompt:  req.SystemPrompt,
-		Skills:        req.Skills,
-		MaxConcurrent: int(req.MaxConcurrent),
-		Timeout:       time.Duration(req.TimeoutMs) * time.Millisecond,
-		MaxRetries:    int(req.MaxRetries),
-		ResourceLimits: api.ResourceLimits{
+	var resourceLimits api.ResourceLimits
+	if req.ResourceLimits != nil {
+		resourceLimits = api.ResourceLimits{
 			MaxMemoryMB:      int(req.ResourceLimits.MaxMemoryMb),
 			MaxCPUPercent:    int(req.ResourceLimits.MaxCpuPercent),
 			MaxTokensPerTask: int(req.ResourceLimits.MaxTokensPerTask),
 			MaxTasksPerHour:  int(req.ResourceLimits.MaxTasksPerHour),
-		},
+		}
+	}
+
+	_ = &api.AgentConfig{
+		ID:             req.Id,
+		Type:           api.AgentType(req.Type.String()),
+		Name:           req.Name,
+		Model:          req.Model,
+		SystemPrompt:   req.SystemPrompt,
+		Skills:         req.Skills,
+		MaxConcurrent:  int(req.MaxConcurrent),
+		Timeout:        time.Duration(req.TimeoutMs) * time.Millisecond,
+		MaxRetries:     int(req.MaxRetries),
+		ResourceLimits: resourceLimits,
 	}
 
 	agent := &proto.Agent{

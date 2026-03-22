@@ -68,7 +68,7 @@ logging:
 ### Prerequisites
 
 - Server with Linux/macOS
-- Go 1.22+ (or compile binary)
+- Go 1.24+ (or compile binary)
 - 4GB+ RAM minimum, 8GB+ recommended
 - Database (PostgreSQL) for cold storage (optional but recommended)
 - Redis for warm storage (optional but recommended)
@@ -155,8 +155,8 @@ After=network.target
 Type=simple
 User=swarm
 WorkingDirectory=/opt/swarm
-ExecStart=/opt/swarm/swarm server start
-ExecStop=/opt/swarm/swarm server stop
+ExecStart=/opt/swarm/swarm serve
+ExecStop=/bin/kill -s SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10
 Environment="GH_CONFIG_DIR=/opt/swarm/config"
@@ -263,7 +263,7 @@ Create `Dockerfile`:
 
 ```dockerfile
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -283,7 +283,7 @@ COPY --from=builder /app/config ./config/
 
 EXPOSE 8080
 
-CMD ["./swarm", "server", "start"]
+CMD ["./swarm", "serve"]
 ```
 
 ### docker-compose.yml
@@ -621,7 +621,7 @@ rbac:
 **Solutions**:
 ```bash
 # Check Go version
-go version  # Must be 1.22+
+go version  # Must be 1.24+
 
 # Check configuration
 swarm --validate-config

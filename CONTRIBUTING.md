@@ -15,7 +15,7 @@ We welcome contributions to SWARM! This document provides guidelines for contrib
 
 ### Prerequisites
 
-- Go 1.22 or higher
+- Go 1.24 or higher
 - Git
 - Basic understanding of:
   - Go programming language

@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/swarm-ai/swarm/pkg/api"
 )
 
 type MCPConnector struct {
+	mu      sync.RWMutex
 	servers map[string]MCPServer
 }
 
@@ -23,14 +25,20 @@ func NewMCPConnector() *MCPConnector {
 }
 
 func (m *MCPConnector) RegisterServer(name string, server MCPServer) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.servers[name] = server
 }
 
 func (m *MCPConnector) UnregisterServer(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.servers, name)
 }
 
 func (m *MCPConnector) GetAvailableTools() []api.Tool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var tools []api.Tool
 	for _, server := range m.servers {
 		tools = append(tools, server.GetTools()...)
@@ -39,6 +47,8 @@ func (m *MCPConnector) GetAvailableTools() []api.Tool {
 }
 
 func (m *MCPConnector) ExecuteTool(ctx context.Context, toolCall api.ToolCall) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, server := range m.servers {
 		tools := server.GetTools()
 		for _, tool := range tools {

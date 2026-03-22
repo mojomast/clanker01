@@ -16,6 +16,7 @@ import (
 
 // subscriber holds a pattern and callback for context event subscriptions.
 type subscriber struct {
+	id       string
 	pattern  string
 	callback api.ContextCallback
 }
@@ -187,7 +188,12 @@ func (s *TieredContextStore) Subscribe(pattern string, callback api.ContextCallb
 	s.subMu.Lock()
 	defer s.subMu.Unlock()
 
+	idBytes := make([]byte, 8)
+	rand.Read(idBytes)
+	id := hex.EncodeToString(idBytes)
+
 	sub := subscriber{
+		id:       id,
 		pattern:  pattern,
 		callback: callback,
 	}
@@ -198,7 +204,7 @@ func (s *TieredContextStore) Subscribe(pattern string, callback api.ContextCallb
 		s.subMu.Lock()
 		defer s.subMu.Unlock()
 		for i, existing := range s.subscribers {
-			if &existing.callback == &sub.callback {
+			if existing.id == id {
 				s.subscribers = append(s.subscribers[:i], s.subscribers[i+1:]...)
 				return nil
 			}

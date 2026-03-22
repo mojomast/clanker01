@@ -1,39 +1,28 @@
 # Handoff
-## Completed: Harden config manager and task orchestration wiring
+## Completed: Fix critical race conditions, path traversal, and lock ordering bugs
 ## Next Task: N/A
 ## Context:
-Applied 10 fixes across 6 files to harden config management and task orchestration.
-All fixes verified with `go build ./...` and `go vet ./...` — both pass cleanly.
+Applied 3 categories of fixes across 3 files to address critical and high-severity bugs.
 
 ## Files Modified:
 - `internal/config/manager.go`
-- `internal/core/orchestrator/coordinator.go`
-- `internal/core/orchestrator/scheduler.go`
-- `internal/core/task/verifier.go`
-- `internal/core/task/bridge.go`
-- `internal/config/validation.go`
+- `internal/skills/builtin/web/skill.go`
+- `internal/server/rest/handlers.go`
 
 ## Changes Made:
 
-### internal/config/manager.go (4 fixes)
-1. **CRITICAL: Race in watchLoop** — `m.watcher.stopChan` was accessed without lock in select; Close() nils `m.watcher` under lock. Fixed by capturing `watcherStop` channel under RLock before entering loop.
-2. **CRITICAL: Race in checkConfigChange** — `m.watcher` could be nil after Close(). Fixed by reading `m.watcher` under RLock, nil-checking before use.
-3. **HIGH: Update() mutates in-place** — If updater modifies config and Validate fails, config was left partially mutated. Fixed by deep-copying via JSON marshal/unmarshal before applying updater. Added `deepCopyConfig()` helper.
-4. **MEDIUM: Config file permissions** — Changed `0644` to `0600` on both saveYAML and saveJSON for sensitive config files.
+### internal/config/manager.go (Issue 1: watchLoop race on errorChan close)
+1. **Removed `close(m.errorChan)` and `m.errorChan = nil` from Close()** — The watchLoop goroutine could send on a closed channel causing a panic. The stopChan close already signals the goroutine to exit; errorChan will be GC'd.
+2. **Captured `m.stopChan` as local `stopChan` in watchLoop** — Close() sets `m.stopChan = nil` which would cause the select to read a nil field without lock protection. Now both `watcherStop` and `stopChan` are captured under RLock before entering the loop.
+3. **Removed stale `m.errorChan != nil` check** — Since errorChan is no longer nilled, the nil check is unnecessary.
 
-### internal/core/orchestrator/coordinator.go (2 fixes)
-5. **CRITICAL: Infinite recursion in SubmitTask** — `shouldPlan` could trigger for subtasks, causing recursive planning forever. Fixed by adding `t.ParentID == ""` guard — only top-level tasks are planned.
-6. **MEDIUM: Parent marked completed before subtasks run** — Changed `api.TaskStatusCompleted` to `api.TaskStatusBlocked` so parent waits for subtask completion.
+### internal/skills/builtin/web/skill.go (Issue 2: path traversal in download)
+1. **Added path sanitization** — Clean with `filepath.Clean`, resolve relative paths to absolute, reject paths containing `..` after cleaning, and verify the resolved path is within the current working directory.
 
-### internal/core/orchestrator/scheduler.go (1 fix)
-7. **HIGH: Silent re-enqueue failure** — `_ = s.taskQueue.Enqueue(...)` discarded errors, losing tasks. Fixed to call `s.taskQueue.Fail()` if re-enqueue fails.
-
-### internal/core/task/verifier.go (2 fixes)
-8. **MEDIUM: Nil task in Verify** — Added nil guard returning invalid VerificationResult.
-9. **HIGH: Unguarded type assertion** — `r.(string)` in validateObject panics on non-string. Fixed with safe `r, ok := r.(string)` + continue.
-
-### internal/core/task/bridge.go (1 fix)
-10. **MEDIUM: Nil input in ObjectiveFromAPITask** — Added nil guard returning empty Objective.
-
-### internal/config/validation.go (1 fix)
-11. **MEDIUM: Empty errors slice** — `formatValidationErrors` now guards against empty slice, returning "validation failed: unknown error".
+### internal/server/rest/handlers.go (Issue 3: response built after unlock)
+1. **Moved response construction before `s.mu.Unlock()` in 9 handlers:**
+   - `handleUpdateAgent`, `handleStartAgent`, `handleStopAgent`, `handlePauseAgent`, `handleResumeAgent`
+   - `handleUpdateTask`, `handleStartTask`, `handleCancelTask`
+   - `handleUpdateSkill`
+   
+   Previously, the lock was released before building the response struct from the mutated object, allowing another goroutine to modify it between unlock and response construction.

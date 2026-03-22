@@ -101,13 +101,14 @@ Built with [Bubbletea](https://github.com/charmbracelet/bubbletea), provides an 
 
 #### Remote Client
 
-**Location**: `cmd/swarm/`
+**Location**: `cmd/swarm/internal/`
 
 Cobra-based CLI that can connect to remote SWARM instances:
 
-- Connects via gRPC or WebSocket
-- Supports all CLI commands locally or remotely
-- Manages connection state and reconnection
+- **REST Client**: HTTP-based client with path escaping and URL scheme validation (http/https)
+- **Connection Persistence**: Server URL and token saved to `~/.config/swarm/connection.json` with atomic file writes
+- **Bounded Reads**: Response bodies are read with size limits to prevent memory exhaustion
+- **Security**: Token redaction in logs, path injection prevention, HOME directory fallback handling
 
 ### API Layer
 
@@ -214,10 +215,12 @@ Tiered storage architecture:
 
 Universal provider interface:
 
-- **75+ Providers**: Anthropic, OpenAI, Google, Azure, AWS, Ollama, etc.
-- **Message Normalization**: Unified request/response format
-- **Retry Circuit Breaker**: Automatic retry with exponential backoff
-- **Semantic Caching**: Cache similar prompts/responses
+- **Anthropic Provider**: Real HTTP client with SSE streaming, Anthropic message normalization, proper `anthropic-version` headers
+- **OpenAI Provider**: Real HTTP client with SSE streaming, OpenAI chat completion normalization
+- **Message Normalization**: Unified request/response format via provider-specific normalizers
+- **Provider Factory**: `NewProvider()` factory function creates the correct provider from config
+- **Retry Circuit Breaker**: Automatic retry with exponential backoff and jitter
+- **Semantic Caching**: Cache with LRU eviction and TTL expiry to prevent unbounded memory growth
 - **Cost Tracking**: Token usage and cost per provider/model
 
 ### Security & Monitoring
@@ -407,6 +410,8 @@ Universal provider interface:
 
 ## Code Quality & Audit History
 
+### Phase 1: Bug Fixes (81 files changed, +1638/-656 lines)
+
 A comprehensive code quality audit was performed across all 11 modules in the codebase, identifying and fixing approximately 280 issues. The major categories of issues addressed include:
 
 - **Concurrency Safety**: Race conditions, deadlocks, and unsafe map/slice access under concurrent use were fixed throughout the orchestrator, context store, MCP server, security layer, and server components.
@@ -417,6 +422,25 @@ A comprehensive code quality audit was performed across all 11 modules in the co
 - **Wiring**: Previously disconnected subsystems were properly connected — TUI keyboard handling (`q`/quit, view switching, tab cycling, help), orchestrator agent registration (`RegisterAgent`), and context store queries now search across all storage tiers.
 
 All 27 test packages pass after the fixes.
+
+### Phase 2: Feature Implementation (23 files changed, +2960/-136 lines, 5 new files)
+
+Core features that were originally stubbed out were fully implemented:
+
+- **LLM Provider API Calls**: Real HTTP implementations for Anthropic and OpenAI with SSE streaming, provider-specific message normalizers, and a factory function for provider creation.
+- **Remote Client Connection**: REST-based client with connection persistence, URL validation, and CLI commands (`connect`, `agent list/create/delete/info/stats`, `skill list/install/search/info`) wired to the client.
+- **REST Config Endpoints**: GET/PUT/validate/schema endpoints with API key redaction and a `ServerOption` pattern for dependency injection.
+- **Task Package Wiring**: Bridge layer connecting task verification to the orchestrator, planner integration for task decomposition, and verifier integration in the scheduler.
+
+### Phase 3: Production Hardening (26 files changed, +677/-120 lines)
+
+A hardening pass focused on eliminating race conditions, resource leaks, and edge-case failures:
+
+- **WebSocket Broadcast**: 5 race conditions in test callbacks fixed with `sync.Mutex`.
+- **Remote Client**: Path injection prevention, URL scheme validation, false-success CLI fixes, bounded response reads, atomic file writes, HOME directory fallback fix, error logging on connection load failures.
+- **Config Manager**: Watcher nil race fix, `Update()` rollback via JSON deep copy on validation failure, 0600 file permissions for config files containing secrets, empty error slice guard in validation.
+- **Task Orchestration**: Infinite recursion guard in `SubmitTask` (only plan top-level tasks), re-enqueue error handling, safe type assertions, nil guards throughout verifier and bridge.
+- **LLM Providers**: Resource leak fixes (response body close), nil dereference guards, cache eviction to prevent unbounded memory growth, MaxTokens field fix in Anthropic requests.
 
 ## Future Enhancements
 

@@ -110,7 +110,11 @@ func (c *CostTracker) GetModelCost(model string) (*ModelCost, bool) {
 	defer c.mu.RUnlock()
 
 	cost, ok := c.byModel[model]
-	return cost, ok
+	if !ok {
+		return nil, false
+	}
+	copied := *cost
+	return &copied, true
 }
 
 // GetProviderCost returns cost for a specific provider
@@ -119,7 +123,19 @@ func (c *CostTracker) GetProviderCost(provider string) (*ProviderCost, bool) {
 	defer c.mu.RUnlock()
 
 	cost, ok := c.byProvider[provider]
-	return cost, ok
+	if !ok {
+		return nil, false
+	}
+	copied := *cost
+	// Deep copy the Models map to avoid sharing internal state
+	if cost.Models != nil {
+		copied.Models = make(map[string]*ModelCost, len(cost.Models))
+		for k, v := range cost.Models {
+			mc := *v
+			copied.Models[k] = &mc
+		}
+	}
+	return &copied, true
 }
 
 // GetAllModelCosts returns all model costs
@@ -129,7 +145,8 @@ func (c *CostTracker) GetAllModelCosts() []*ModelCost {
 
 	costs := make([]*ModelCost, 0, len(c.byModel))
 	for _, cost := range c.byModel {
-		costs = append(costs, cost)
+		copied := *cost
+		costs = append(costs, &copied)
 	}
 
 	return costs
@@ -142,7 +159,16 @@ func (c *CostTracker) GetAllProviderCosts() []*ProviderCost {
 
 	costs := make([]*ProviderCost, 0, len(c.byProvider))
 	for _, cost := range c.byProvider {
-		costs = append(costs, cost)
+		copied := *cost
+		// Deep copy the Models map to avoid sharing internal state
+		if cost.Models != nil {
+			copied.Models = make(map[string]*ModelCost, len(cost.Models))
+			for k, v := range cost.Models {
+				mc := *v
+				copied.Models[k] = &mc
+			}
+		}
+		costs = append(costs, &copied)
 	}
 
 	return costs

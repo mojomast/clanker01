@@ -156,7 +156,9 @@ func (rm *RecoveryManager) escalate(ctx context.Context, task *api.Task, err err
 }
 
 func (rm *RecoveryManager) getAgentCurrentTask(agentID string) *api.Task {
-	taskID, ok := rm.scheduler.GetAssignment(agentID)
+	// Use reverse lookup: assignments map is taskID->agentID, so we need
+	// GetTaskForAgent to find the taskID assigned to this agent.
+	taskID, ok := rm.scheduler.GetTaskForAgent(agentID)
 	if !ok {
 		return nil
 	}

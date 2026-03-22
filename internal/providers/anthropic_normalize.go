@@ -164,10 +164,12 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 
 		switch v := msg.Content.(type) {
 		case string:
-			am.Content = []anthropicContent{{
-				Type: "text",
-				Text: v,
-			}}
+			if v != "" {
+				am.Content = []anthropicContent{{
+					Type: "text",
+					Text: v,
+				}}
+			}
 		case []api.ContentPart:
 			for _, part := range v {
 				ac := anthropicContent{Type: "text"}
@@ -175,6 +177,9 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 				case "text":
 					ac.Text = part.Text
 				case "image":
+					if part.ImageURL == nil {
+						continue
+					}
 					ac.Type = "image"
 					ac.Source = &anthropicSource{
 						Type:      "base64",
@@ -184,6 +189,10 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 				}
 				am.Content = append(am.Content, ac)
 			}
+		case nil:
+			// Content is nil — common for assistant messages with only tool calls
+		default:
+			return nil, fmt.Errorf("anthropic: unsupported content type %T for message role %s", msg.Content, msg.Role)
 		}
 
 		if len(msg.ToolCalls) > 0 {
@@ -229,9 +238,11 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 		case "required":
 			ar.ToolChoice = map[string]string{"type": "any"}
 		case "function":
-			ar.ToolChoice = map[string]any{
-				"type": "tool",
-				"name": req.ToolChoice.Function.Name,
+			if req.ToolChoice.Function != nil {
+				ar.ToolChoice = map[string]any{
+					"type": "tool",
+					"name": req.ToolChoice.Function.Name,
+				}
 			}
 		}
 	}
@@ -243,7 +254,7 @@ func (n *AnthropicNormalizer) NormalizeRequest(req *api.ChatRequest) (any, error
 // unified *api.ChatResponse. Returns an error if resp is nil or not the expected type.
 func (n *AnthropicNormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error) {
 	if resp == nil {
-		return nil, fmt.Errorf("AnthropicNormalizer.NormalizeResponse: not yet implemented")
+		return nil, fmt.Errorf("AnthropicNormalizer.NormalizeResponse: response is nil")
 	}
 
 	ar, ok := resp.(*anthropicResponse)
@@ -315,7 +326,7 @@ func (n *AnthropicNormalizer) NormalizeResponse(resp any) (*api.ChatResponse, er
 // to a unified *api.ChatStreamEvent. Returns error if event is nil or wrong type.
 func (n *AnthropicNormalizer) NormalizeStreamEvent(event any) (*api.ChatStreamEvent, error) {
 	if event == nil {
-		return nil, fmt.Errorf("AnthropicNormalizer.NormalizeStreamEvent: not yet implemented")
+		return nil, fmt.Errorf("AnthropicNormalizer.NormalizeStreamEvent: event is nil")
 	}
 
 	se, ok := event.(*anthropicStreamEvent)

@@ -226,6 +226,9 @@ func (r *ValidationResult) addWarning(message string) {
 }
 
 func formatValidationErrors(errors []ValidationError) error {
+	if len(errors) == 0 {
+		return fmt.Errorf("validation failed: unknown error")
+	}
 	if len(errors) == 1 {
 		return &errors[0]
 	}

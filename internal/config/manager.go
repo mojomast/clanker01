@@ -126,14 +126,22 @@ func (m *Manager) Update(updater func(*Config) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if err := updater(m.config); err != nil {
+	// Deep-copy the current config so the updater doesn't mutate the live copy.
+	// If validation fails after the update, the original config remains intact.
+	snapshot, err := deepCopyConfig(m.config)
+	if err != nil {
+		return fmt.Errorf("failed to snapshot config: %w", err)
+	}
+
+	if err := updater(snapshot); err != nil {
 		return fmt.Errorf("config update failed: %w", err)
 	}
 
-	if err := Validate(m.config); err != nil {
+	if err := Validate(snapshot); err != nil {
 		return fmt.Errorf("config validation failed after update: %w", err)
 	}
 
+	m.config = snapshot
 	return nil
 }
 
@@ -161,7 +169,7 @@ func (m *Manager) saveYAML() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config to YAML: %w", err)
 	}
-	return os.WriteFile(m.configPath, data, 0644)
+	return os.WriteFile(m.configPath, data, 0600)
 }
 
 func (m *Manager) saveJSON() error {
@@ -169,7 +177,21 @@ func (m *Manager) saveJSON() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config to JSON: %w", err)
 	}
-	return os.WriteFile(m.configPath, data, 0644)
+	return os.WriteFile(m.configPath, data, 0600)
+}
+
+// deepCopyConfig creates a deep copy of a Config using JSON marshal/unmarshal.
+// This ensures that mutations to the copy don't affect the original.
+func deepCopyConfig(src *Config) (*Config, error) {
+	data, err := json.Marshal(src)
+	if err != nil {
+		return nil, err
+	}
+	var dst Config
+	if err := json.Unmarshal(data, &dst); err != nil {
+		return nil, err
+	}
+	return &dst, nil
 }
 
 func (m *Manager) Watch() <-chan *Config {
@@ -222,6 +244,13 @@ func (m *Manager) startWatcher() error {
 }
 
 func (m *Manager) watchLoop() {
+	// Capture the watcher's stopChan under lock before entering the loop.
+	// Close() may set m.watcher = nil, so reading m.watcher.stopChan in the
+	// select would race with Close().
+	m.mu.RLock()
+	watcherStop := m.watcher.stopChan
+	m.mu.RUnlock()
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -234,7 +263,7 @@ func (m *Manager) watchLoop() {
 				default:
 				}
 			}
-		case <-m.watcher.stopChan:
+		case <-watcherStop:
 			return
 		case <-m.stopChan:
 			return
@@ -249,10 +278,15 @@ func (m *Manager) checkConfigChange() error {
 	}
 
 	m.mu.RLock()
-	lastModTime := m.watcher.modTime
+	w := m.watcher
 	m.mu.RUnlock()
 
-	if info.ModTime().After(lastModTime) {
+	// watcher may have been nilled by Close(); bail out gracefully.
+	if w == nil {
+		return nil
+	}
+
+	if info.ModTime().After(w.modTime) {
 		if err := m.Reload(); err != nil {
 			return fmt.Errorf("config reload failed: %w", err)
 		}

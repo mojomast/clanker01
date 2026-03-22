@@ -28,8 +28,11 @@ type SessionPersistence struct {
 	cancel       context.CancelFunc
 }
 
+// PersistedSession is the on-disk representation of a Session. It stores a
+// pointer to the Session rather than a copy to avoid copying the sync.RWMutex
+// embedded in Session (copying a mutex is forbidden by Go).
 type PersistedSession struct {
-	Session
+	*Session
 	Version    int64
 	Checksum   string
 	LastSyncAt time.Time
@@ -196,7 +199,7 @@ func (p *SessionPersistence) loadFromFile() error {
 	}
 
 	for id, ps := range persisted {
-		p.sessions[id] = &ps.Session
+		p.sessions[id] = ps.Session
 	}
 
 	return nil
@@ -210,7 +213,7 @@ func (p *SessionPersistence) saveToFile() error {
 	persisted := make(map[string]*PersistedSession)
 	for id, session := range p.sessions {
 		persisted[id] = &PersistedSession{
-			Session:    *session,
+			Session:    session,
 			Version:    time.Now().Unix(),
 			Checksum:   computeChecksum(session),
 			LastSyncAt: time.Now(),
@@ -269,7 +272,7 @@ func (p *SessionPersistence) Backup(backupPath string) error {
 	persisted := make(map[string]*PersistedSession)
 	for id, session := range p.sessions {
 		persisted[id] = &PersistedSession{
-			Session:    *session,
+			Session:    session,
 			Version:    time.Now().Unix(),
 			Checksum:   computeChecksum(session),
 			LastSyncAt: time.Now(),
@@ -303,7 +306,7 @@ func (p *SessionPersistence) Restore(backupPath string) error {
 	defer p.mu.Unlock()
 
 	for id, ps := range persisted {
-		p.sessions[id] = &ps.Session
+		p.sessions[id] = ps.Session
 	}
 
 	if p.backend == PersistenceBackendFile {

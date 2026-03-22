@@ -107,11 +107,28 @@ func (p *AnthropicProvider) Configure(config *api.ProviderConfig) error {
 
 	if config.Timeout > 0 {
 		p.mu.Lock()
-		p.httpClient.Timeout = config.Timeout
+		// Recreate the HTTP client to avoid racing with concurrent Do calls
+		p.httpClient = &http.Client{
+			Timeout: config.Timeout,
+		}
 		p.mu.Unlock()
 	}
 
 	return nil
+}
+
+// getHTTPClient returns the standard HTTP client under the lock.
+func (p *AnthropicProvider) getHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.httpClient
+}
+
+// getStreamHTTPClient returns the streaming HTTP client under the lock.
+func (p *AnthropicProvider) getStreamHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.streamHTTPClient
 }
 
 // baseURL returns the configured base URL or the default Anthropic URL.
@@ -161,7 +178,8 @@ func (p *AnthropicProvider) buildHTTPRequest(ctx context.Context, body []byte) (
 
 // handleErrorResponse parses an Anthropic error response and returns a ProviderError.
 func (p *AnthropicProvider) handleErrorResponse(resp *http.Response) *ProviderError {
-	body, err := io.ReadAll(resp.Body)
+	// Limit error body to 1 MB to prevent OOM from malicious/buggy servers
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return NewProviderError(
 			"read_error",
@@ -200,7 +218,10 @@ func (p *AnthropicProvider) Chat(ctx context.Context, req *api.ChatRequest) (*ap
 		return nil, fmt.Errorf("anthropic: normalize request: %w", err)
 	}
 
-	ar := normalized.(*anthropicRequest)
+	ar, ok := normalized.(*anthropicRequest)
+	if !ok {
+		return nil, fmt.Errorf("anthropic: normalize returned unexpected type %T", normalized)
+	}
 	ar.Stream = false
 
 	// Set default max_tokens if not specified
@@ -218,7 +239,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, req *api.ChatRequest) (*ap
 		return nil, err
 	}
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := p.getHTTPClient().Do(httpReq)
 	if err != nil {
 		latency := float64(time.Since(start).Milliseconds())
 		p.recordMetrics(nil, latency, err)
@@ -268,7 +289,10 @@ func (p *AnthropicProvider) StreamChat(ctx context.Context, req *api.ChatRequest
 		return nil, fmt.Errorf("anthropic: normalize request: %w", err)
 	}
 
-	ar := normalized.(*anthropicRequest)
+	ar, ok := normalized.(*anthropicRequest)
+	if !ok {
+		return nil, fmt.Errorf("anthropic: normalize returned unexpected type %T", normalized)
+	}
 	ar.Stream = true
 
 	// Set default max_tokens if not specified
@@ -287,7 +311,7 @@ func (p *AnthropicProvider) StreamChat(ctx context.Context, req *api.ChatRequest
 	}
 
 	// Use the stream HTTP client (no timeout)
-	resp, err := p.streamHTTPClient.Do(httpReq)
+	resp, err := p.getStreamHTTPClient().Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic: HTTP stream request failed: %w", err)
 	}
@@ -311,8 +335,21 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 	defer close(ch)
 	defer body.Close()
 
+	// sendEvent sends an event to the channel, returning false if the context
+	// is cancelled (meaning the consumer is gone and we should stop).
+	sendEvent := func(evt api.ChatStreamEvent) bool {
+		select {
+		case ch <- evt:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+
 	start := time.Now()
 	scanner := bufio.NewScanner(body)
+	// Allow up to 1 MB per SSE line (default 64KB is too small for large tool call payloads)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var eventType string
 	var totalUsage api.Usage
@@ -323,10 +360,10 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
-			ch <- api.ChatStreamEvent{
+			sendEvent(api.ChatStreamEvent{
 				Type:  api.StreamEventError,
 				Error: ctx.Err(),
-			}
+			})
 			return
 		default:
 		}
@@ -342,9 +379,11 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 
 			var streamEvent anthropicStreamEvent
 			if err := json.Unmarshal([]byte(data), &streamEvent); err != nil {
-				ch <- api.ChatStreamEvent{
+				if !sendEvent(api.ChatStreamEvent{
 					Type:  api.StreamEventError,
 					Error: fmt.Errorf("anthropic: parse stream event: %w", err),
+				}) {
+					return
 				}
 				continue
 			}
@@ -356,9 +395,11 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 
 			normalized, err := p.normalizer.NormalizeStreamEvent(&streamEvent)
 			if err != nil {
-				ch <- api.ChatStreamEvent{
+				if !sendEvent(api.ChatStreamEvent{
 					Type:  api.StreamEventError,
 					Error: err,
+				}) {
+					return
 				}
 				continue
 			}
@@ -374,7 +415,9 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 				totalUsage.TotalTokens = totalUsage.PromptTokens + totalUsage.CompletionTokens
 			}
 
-			ch <- *normalized
+			if !sendEvent(*normalized) {
+				return
+			}
 
 			eventType = "" // Reset for next event
 		}
@@ -383,10 +426,10 @@ func (p *AnthropicProvider) consumeSSEStream(ctx context.Context, body io.ReadCl
 	}
 
 	if err := scanner.Err(); err != nil {
-		ch <- api.ChatStreamEvent{
+		sendEvent(api.ChatStreamEvent{
 			Type:  api.StreamEventError,
 			Error: fmt.Errorf("anthropic: stream read error: %w", err),
-		}
+		})
 	}
 
 	// Record metrics after stream completes

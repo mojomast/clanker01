@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -74,21 +75,26 @@ func TestBroadcastManagerBroadcastAsync(t *testing.T) {
 
 	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
 
+	var mu sync.Mutex
 	callbackCalled := false
 	var success, failed int
 
 	err := bm.BroadcastAsync(msg, &BroadcastTarget{All: true}, func(s, f int) {
+		mu.Lock()
 		callbackCalled = true
 		success = s
 		failed = f
+		mu.Unlock()
 	})
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
 	assert.True(t, callbackCalled)
 	assert.Equal(t, 1, success)
 	assert.Equal(t, 0, failed)
+	mu.Unlock()
 
 	hub.Stop()
 }
@@ -246,12 +252,15 @@ func TestBroadcastManagerStopped(t *testing.T) {
 }
 
 func TestNewBufferedBroadcaster(t *testing.T) {
+	var mu sync.Mutex
 	broadcastCalled := false
 	var receivedMsg *Message
 
 	bb := NewBufferedBroadcaster(10, 100*time.Millisecond, func(msg *Message) {
+		mu.Lock()
 		broadcastCalled = true
 		receivedMsg = msg
+		mu.Unlock()
 	})
 
 	assert.NotNil(t, bb)
@@ -263,18 +272,23 @@ func TestNewBufferedBroadcaster(t *testing.T) {
 
 	time.Sleep(150 * time.Millisecond)
 
+	mu.Lock()
 	assert.True(t, broadcastCalled)
 	assert.NotNil(t, receivedMsg)
 	assert.Equal(t, msg.Type, receivedMsg.Type)
+	mu.Unlock()
 }
 
 func TestBufferedBroadcasterFlushOnMaxSize(t *testing.T) {
+	var mu sync.Mutex
 	broadcastCalled := false
 	var messages []*Message
 
 	bb := NewBufferedBroadcaster(3, 1*time.Second, func(msg *Message) {
+		mu.Lock()
 		broadcastCalled = true
 		messages = append(messages, msg)
+		mu.Unlock()
 	})
 
 	for i := 0; i < 3; i++ {
@@ -284,37 +298,49 @@ func TestBufferedBroadcasterFlushOnMaxSize(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
+	mu.Lock()
 	assert.True(t, broadcastCalled)
 	assert.Len(t, messages, 3)
+	mu.Unlock()
 }
 
 func TestBufferedBroadcasterManualFlush(t *testing.T) {
+	var mu sync.Mutex
 	broadcastCalled := false
 	var messages []*Message
 
 	bb := NewBufferedBroadcaster(10, 1*time.Second, func(msg *Message) {
+		mu.Lock()
 		broadcastCalled = true
 		messages = append(messages, msg)
+		mu.Unlock()
 	})
 
 	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
 	bb.Add(msg)
 
 	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
 	assert.False(t, broadcastCalled)
+	mu.Unlock()
 
 	bb.Flush()
 	time.Sleep(50 * time.Millisecond)
 
+	mu.Lock()
 	assert.True(t, broadcastCalled)
 	assert.Len(t, messages, 1)
+	mu.Unlock()
 }
 
 func TestBufferedBroadcasterStop(t *testing.T) {
+	var mu sync.Mutex
 	broadcastCalled := false
 
 	bb := NewBufferedBroadcaster(10, 100*time.Millisecond, func(msg *Message) {
+		mu.Lock()
 		broadcastCalled = true
+		mu.Unlock()
 	})
 
 	msg := NewLogEntry("info", "test message", "agent-1", "task-1")
@@ -323,7 +349,9 @@ func TestBufferedBroadcasterStop(t *testing.T) {
 	bb.Stop()
 	time.Sleep(150 * time.Millisecond)
 
+	mu.Lock()
 	assert.True(t, broadcastCalled)
+	mu.Unlock()
 }
 
 func TestNewMessageFilter(t *testing.T) {

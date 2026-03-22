@@ -150,8 +150,11 @@ func runSkillInstall(cmd *cobra.Command, args []string) error {
 		if apiErr := client.InstallSkill(cmd.Context(), req); apiErr != nil {
 			return fmt.Errorf("failed to install skill: %w", apiErr)
 		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Successfully installed skill '%s' version %s\n", name, skillVersion)
+		return nil
 	}
 
+	// Local mode fallback
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully installed skill '%s' version %s\n", name, skillVersion)
 
 	return nil
@@ -181,8 +184,11 @@ func runSkillUninstall(cmd *cobra.Command, args []string) error {
 		if apiErr := client.RemoveSkill(cmd.Context(), name); apiErr != nil {
 			return fmt.Errorf("failed to uninstall skill: %w", apiErr)
 		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Successfully uninstalled skill '%s'\n", name)
+		return nil
 	}
 
+	// Local mode fallback
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully uninstalled skill '%s'\n", name)
 
 	return nil

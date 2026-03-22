@@ -44,10 +44,16 @@ func runConnect(cmd *cobra.Command, args []string) error {
 
 	if verbose {
 		fmt.Fprintf(cmd.OutOrStdout(), "Connecting to: %s\n", connectURL)
+		if connectToken != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Using authentication token: ****\n")
+		}
 	}
 
 	// Create a temporary client and test connectivity via the health endpoint.
-	client := NewClient(connectURL, connectToken)
+	client, err := NewClient(connectURL, connectToken)
+	if err != nil {
+		return err
+	}
 	client.httpClient.Timeout = connectTimeout
 
 	if err := client.Ping(ctx); err != nil {

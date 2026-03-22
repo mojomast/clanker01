@@ -19,11 +19,12 @@ type Cache interface {
 	Clear(ctx context.Context) error
 }
 
-// InMemoryCache is a simple in-memory cache
+// InMemoryCache is a simple in-memory cache with TTL and max size
 type InMemoryCache struct {
-	mu    sync.RWMutex
-	store map[string]*cacheEntry
-	ttl   time.Duration
+	mu      sync.RWMutex
+	store   map[string]*cacheEntry
+	ttl     time.Duration
+	maxSize int // maximum number of entries; 0 means no limit
 }
 
 type cacheEntry struct {
@@ -32,11 +33,13 @@ type cacheEntry struct {
 	hits      int
 }
 
-// NewInMemoryCache creates a new in-memory cache
+// NewInMemoryCache creates a new in-memory cache with the given TTL and a
+// default maximum of 1000 entries to prevent unbounded growth.
 func NewInMemoryCache(ttl time.Duration) *InMemoryCache {
 	return &InMemoryCache{
-		store: make(map[string]*cacheEntry),
-		ttl:   ttl,
+		store:   make(map[string]*cacheEntry),
+		ttl:     ttl,
+		maxSize: 1000,
 	}
 }
 
@@ -64,6 +67,31 @@ func (c *InMemoryCache) Get(ctx context.Context, key string) (*api.ChatResponse,
 func (c *InMemoryCache) Set(ctx context.Context, key string, resp *api.ChatResponse) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Evict expired entries first
+	if c.maxSize > 0 && len(c.store) >= c.maxSize {
+		now := time.Now()
+		for k, entry := range c.store {
+			if now.After(entry.expiresAt) {
+				delete(c.store, k)
+			}
+		}
+	}
+
+	// If still over capacity, evict the oldest entry
+	if c.maxSize > 0 && len(c.store) >= c.maxSize {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, entry := range c.store {
+			if oldestKey == "" || entry.expiresAt.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = entry.expiresAt
+			}
+		}
+		if oldestKey != "" {
+			delete(c.store, oldestKey)
+		}
+	}
 
 	c.store[key] = &cacheEntry{
 		value:     resp,

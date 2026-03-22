@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -19,14 +20,24 @@ type Client struct {
 }
 
 // NewClient creates a new SWARM REST API client.
-func NewClient(baseURL, token string) *Client {
+// The baseURL must use http:// or https:// scheme.
+func NewClient(baseURL, token string) (*Client, error) {
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		return nil, fmt.Errorf("invalid base URL %q: must start with http:// or https://", baseURL)
+	}
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   token,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-	}
+	}, nil
+}
+
+// sanitizePathParam escapes a user-provided string for safe inclusion
+// in a URL path segment, preventing path traversal attacks.
+func sanitizePathParam(s string) string {
+	return url.PathEscape(s)
 }
 
 // --- Client-side response types (mirrors server-side JSON shapes) ---
@@ -149,8 +160,8 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body interface
 		return nil
 	}
 
-	// Read the full body for error reporting or decoding.
-	respBody, err := io.ReadAll(resp.Body)
+	// Read the full body for error reporting or decoding (capped at 10 MB).
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -210,7 +221,7 @@ func (c *Client) CreateAgent(ctx context.Context, req *APICreateAgentRequest) (*
 // GetAgent retrieves a single agent by ID.
 func (c *Client) GetAgent(ctx context.Context, id string) (*APIAgentResponse, error) {
 	var resp APIAgentResponse
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/agents/"+id, nil, &resp); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/agents/"+sanitizePathParam(id), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -218,17 +229,17 @@ func (c *Client) GetAgent(ctx context.Context, id string) (*APIAgentResponse, er
 
 // DeleteAgent removes an agent by ID.
 func (c *Client) DeleteAgent(ctx context.Context, id string) error {
-	return c.doJSON(ctx, http.MethodDelete, "/api/v1/agents/"+id, nil, nil)
+	return c.doJSON(ctx, http.MethodDelete, "/api/v1/agents/"+sanitizePathParam(id), nil, nil)
 }
 
 // StartAgent starts an agent by ID.
 func (c *Client) StartAgent(ctx context.Context, id string) error {
-	return c.doJSON(ctx, http.MethodPost, "/api/v1/agents/"+id+"/start", nil, nil)
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/agents/"+sanitizePathParam(id)+"/start", nil, nil)
 }
 
 // StopAgent stops an agent by ID.
 func (c *Client) StopAgent(ctx context.Context, id string) error {
-	return c.doJSON(ctx, http.MethodPost, "/api/v1/agents/"+id+"/stop", nil, nil)
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/agents/"+sanitizePathParam(id)+"/stop", nil, nil)
 }
 
 // --- Skill methods ---
@@ -245,7 +256,7 @@ func (c *Client) ListSkills(ctx context.Context) ([]APISkillResponse, error) {
 // GetSkill retrieves a single skill by name/ID.
 func (c *Client) GetSkill(ctx context.Context, name string) (*APISkillResponse, error) {
 	var resp APISkillResponse
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/skills/"+name, nil, &resp); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/skills/"+sanitizePathParam(name), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -258,5 +269,5 @@ func (c *Client) InstallSkill(ctx context.Context, req *APIInstallSkillRequest) 
 
 // RemoveSkill unloads/removes a skill by name/ID.
 func (c *Client) RemoveSkill(ctx context.Context, name string) error {
-	return c.doJSON(ctx, http.MethodDelete, "/api/v1/skills/"+name, nil, nil)
+	return c.doJSON(ctx, http.MethodDelete, "/api/v1/skills/"+sanitizePathParam(name), nil, nil)
 }

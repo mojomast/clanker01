@@ -225,11 +225,13 @@ func (n *OpenAINormalizer) NormalizeRequest(req *api.ChatRequest) (any, error) {
 		case "auto", "none", "required":
 			or.ToolChoice = req.ToolChoice.Type
 		case "function":
-			or.ToolChoice = map[string]any{
-				"type": "function",
-				"function": map[string]string{
-					"name": req.ToolChoice.Function.Name,
-				},
+			if req.ToolChoice.Function != nil {
+				or.ToolChoice = map[string]any{
+					"type": "function",
+					"function": map[string]string{
+						"name": req.ToolChoice.Function.Name,
+					},
+				}
 			}
 		}
 	}
@@ -241,7 +243,7 @@ func (n *OpenAINormalizer) NormalizeRequest(req *api.ChatRequest) (any, error) {
 // unified *api.ChatResponse. Returns an error if resp is nil or not the expected type.
 func (n *OpenAINormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error) {
 	if resp == nil {
-		return nil, fmt.Errorf("OpenAINormalizer.NormalizeResponse: not yet implemented")
+		return nil, fmt.Errorf("OpenAINormalizer.NormalizeResponse: response is nil")
 	}
 
 	or, ok := resp.(*openaiResponse)
@@ -265,10 +267,13 @@ func (n *OpenAINormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error
 			Role: choice.Message.Role,
 		}
 
-		// Handle content — could be string or nil
+		// Handle content — could be string, array (multimodal), or nil
 		if choice.Message.Content != nil {
 			switch v := choice.Message.Content.(type) {
 			case string:
+				msg.Content = v
+			default:
+				// For non-string content (e.g. multimodal array), preserve as-is
 				msg.Content = v
 			}
 		}
@@ -306,7 +311,7 @@ func (n *OpenAINormalizer) NormalizeResponse(resp any) (*api.ChatResponse, error
 // unified *api.ChatStreamEvent. Returns error if event is nil or wrong type.
 func (n *OpenAINormalizer) NormalizeStreamEvent(event any) (*api.ChatStreamEvent, error) {
 	if event == nil {
-		return nil, fmt.Errorf("OpenAINormalizer.NormalizeStreamEvent: not yet implemented")
+		return nil, fmt.Errorf("OpenAINormalizer.NormalizeStreamEvent: event is nil")
 	}
 
 	chunk, ok := event.(*openaiStreamChunk)

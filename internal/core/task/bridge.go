@@ -165,6 +165,10 @@ func TasksToAPITasks(tasks []*Task, parentID string, agentType api.AgentType) []
 
 // ObjectiveFromAPITask builds a Planner Objective from an api.Task.
 func ObjectiveFromAPITask(at *api.Task) Objective {
+	if at == nil {
+		return Objective{}
+	}
+
 	goals := make([]Goal, 0)
 
 	// Build goals from requirements.

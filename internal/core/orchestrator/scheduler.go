@@ -116,7 +116,10 @@ func (s *Scheduler) executeTask(ctx context.Context, agent api.Agent, apiTask *a
 		if apiTask.RetryCount < apiTask.MaxRetries {
 			apiTask.RetryCount++
 			apiTask.Status = api.TaskStatusQueued
-			_ = s.taskQueue.Enqueue(ctx, apiTask)
+			if enqErr := s.taskQueue.Enqueue(ctx, apiTask); enqErr != nil {
+				// Re-enqueue failed; mark the task as failed to avoid silent loss.
+				s.taskQueue.Fail(apiTask.ID, fmt.Errorf("verification failed and re-enqueue failed: %v; original: %v", enqErr, verifyErr))
+			}
 			return
 		}
 		s.taskQueue.Fail(apiTask.ID, verifyErr)
@@ -171,6 +174,21 @@ func (s *Scheduler) GetAssignment(taskID string) (string, bool) {
 
 	agentID, ok := s.assignments[taskID]
 	return agentID, ok
+}
+
+// GetTaskForAgent performs a reverse lookup on the assignments map, returning
+// the taskID currently assigned to the given agentID. This is O(n) but the
+// assignments map is small (bounded by MaxConcurrent * number of agents).
+func (s *Scheduler) GetTaskForAgent(agentID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for taskID, assignedAgent := range s.assignments {
+		if assignedAgent == agentID {
+			return taskID, true
+		}
+	}
+	return "", false
 }
 
 func (s *Scheduler) GetAgentLoad(agentID string) int {

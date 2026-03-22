@@ -40,13 +40,20 @@ func GetClient() (*Client, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("not connected to a server — run 'swarm connect --url <URL>' first")
 	}
-	return NewClient(conn.URL, conn.Token), nil
+	client, err := NewClient(conn.URL, conn.Token)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 // SaveConnection persists the connection to ~/.config/swarm/connection.json
 // so it can be reloaded in future CLI sessions.
 func SaveConnection(conn *Connection) error {
-	path := connectionFilePath()
+	path, err := connectionFilePath()
+	if err != nil {
+		return err
+	}
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -58,8 +65,14 @@ func SaveConnection(conn *Connection) error {
 		return fmt.Errorf("failed to marshal connection: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	// Write atomically: write to temp file then rename to avoid partial writes.
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write connection file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) // clean up
+		return fmt.Errorf("failed to commit connection file: %w", err)
 	}
 
 	return nil
@@ -68,7 +81,10 @@ func SaveConnection(conn *Connection) error {
 // LoadConnection loads a previously saved connection from disk.
 // Returns (nil, nil) if no saved connection exists.
 func LoadConnection() (*Connection, error) {
-	path := connectionFilePath()
+	path, err := connectionFilePath()
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -92,11 +108,10 @@ func LoadConnection() (*Connection, error) {
 
 // connectionFilePath returns the path to the saved connection file:
 // ~/.config/swarm/connection.json
-func connectionFilePath() string {
+func connectionFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		// Fallback to current directory if home is unavailable.
-		home = "."
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "swarm", "connection.json")
+	return filepath.Join(home, ".config", "swarm", "connection.json"), nil
 }

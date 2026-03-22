@@ -106,11 +106,28 @@ func (p *OpenAIProvider) Configure(config *api.ProviderConfig) error {
 
 	if config.Timeout > 0 {
 		p.mu.Lock()
-		p.httpClient.Timeout = config.Timeout
+		// Recreate the HTTP client to avoid racing with concurrent Do calls
+		p.httpClient = &http.Client{
+			Timeout: config.Timeout,
+		}
 		p.mu.Unlock()
 	}
 
 	return nil
+}
+
+// getHTTPClient returns the standard HTTP client under the lock.
+func (p *OpenAIProvider) getHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.httpClient
+}
+
+// getStreamHTTPClient returns the streaming HTTP client under the lock.
+func (p *OpenAIProvider) getStreamHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.streamHTTPClient
 }
 
 // baseURL returns the configured base URL or the default OpenAI URL.
@@ -159,7 +176,8 @@ func (p *OpenAIProvider) buildHTTPRequest(ctx context.Context, body []byte) (*ht
 
 // handleErrorResponse parses an OpenAI error response and returns a ProviderError.
 func (p *OpenAIProvider) handleErrorResponse(resp *http.Response) *ProviderError {
-	body, err := io.ReadAll(resp.Body)
+	// Limit error body to 1 MB to prevent OOM from malicious/buggy servers
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return NewProviderError(
 			"read_error",
@@ -198,7 +216,10 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *api.ChatRequest) (*api.C
 		return nil, fmt.Errorf("openai: normalize request: %w", err)
 	}
 
-	or := normalized.(*openaiRequest)
+	or, ok := normalized.(*openaiRequest)
+	if !ok {
+		return nil, fmt.Errorf("openai: normalize returned unexpected type %T", normalized)
+	}
 	or.Stream = false
 
 	body, err := json.Marshal(or)
@@ -211,7 +232,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *api.ChatRequest) (*api.C
 		return nil, err
 	}
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := p.getHTTPClient().Do(httpReq)
 	if err != nil {
 		latency := float64(time.Since(start).Milliseconds())
 		p.recordMetrics(nil, latency, err)
@@ -261,7 +282,10 @@ func (p *OpenAIProvider) StreamChat(ctx context.Context, req *api.ChatRequest) (
 		return nil, fmt.Errorf("openai: normalize request: %w", err)
 	}
 
-	or := normalized.(*openaiRequest)
+	or, ok := normalized.(*openaiRequest)
+	if !ok {
+		return nil, fmt.Errorf("openai: normalize returned unexpected type %T", normalized)
+	}
 	or.Stream = true
 
 	body, err := json.Marshal(or)
@@ -275,7 +299,7 @@ func (p *OpenAIProvider) StreamChat(ctx context.Context, req *api.ChatRequest) (
 	}
 
 	// Use the stream HTTP client (no timeout)
-	resp, err := p.streamHTTPClient.Do(httpReq)
+	resp, err := p.getStreamHTTPClient().Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("openai: HTTP stream request failed: %w", err)
 	}
@@ -299,8 +323,21 @@ func (p *OpenAIProvider) consumeSSEStream(ctx context.Context, body io.ReadClose
 	defer close(ch)
 	defer body.Close()
 
+	// sendEvent sends an event to the channel, returning false if the context
+	// is cancelled (meaning the consumer is gone and we should stop).
+	sendEvent := func(evt api.ChatStreamEvent) bool {
+		select {
+		case ch <- evt:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+
 	start := time.Now()
 	scanner := bufio.NewScanner(body)
+	// Allow up to 1 MB per SSE line (default 64KB is too small for large tool call payloads)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var totalUsage api.Usage
 
@@ -310,10 +347,10 @@ func (p *OpenAIProvider) consumeSSEStream(ctx context.Context, body io.ReadClose
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
-			ch <- api.ChatStreamEvent{
+			sendEvent(api.ChatStreamEvent{
 				Type:  api.StreamEventError,
 				Error: ctx.Err(),
-			}
+			})
 			return
 		default:
 		}
@@ -327,27 +364,31 @@ func (p *OpenAIProvider) consumeSSEStream(ctx context.Context, body io.ReadClose
 
 		// Check for stream termination
 		if data == "[DONE]" {
-			ch <- api.ChatStreamEvent{
+			sendEvent(api.ChatStreamEvent{
 				Type: api.StreamEventDone,
 				Done: true,
-			}
+			})
 			break
 		}
 
 		var chunk openaiStreamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			ch <- api.ChatStreamEvent{
+			if !sendEvent(api.ChatStreamEvent{
 				Type:  api.StreamEventError,
 				Error: fmt.Errorf("openai: parse stream chunk: %w", err),
+			}) {
+				return
 			}
 			continue
 		}
 
 		normalized, err := p.normalizer.NormalizeStreamEvent(&chunk)
 		if err != nil {
-			ch <- api.ChatStreamEvent{
+			if !sendEvent(api.ChatStreamEvent{
 				Type:  api.StreamEventError,
 				Error: err,
+			}) {
+				return
 			}
 			continue
 		}
@@ -363,14 +404,16 @@ func (p *OpenAIProvider) consumeSSEStream(ctx context.Context, body io.ReadClose
 			totalUsage.TotalTokens = totalUsage.PromptTokens + totalUsage.CompletionTokens
 		}
 
-		ch <- *normalized
+		if !sendEvent(*normalized) {
+			return
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		ch <- api.ChatStreamEvent{
+		sendEvent(api.ChatStreamEvent{
 			Type:  api.StreamEventError,
 			Error: fmt.Errorf("openai: stream read error: %w", err),
-		}
+		})
 	}
 
 	// Record metrics after stream completes

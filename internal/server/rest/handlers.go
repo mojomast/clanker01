@@ -97,10 +97,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	appVersion := "unknown"
+	if cfg := s.getConfig(); cfg != nil {
+		appVersion = cfg.Version
+	}
+
 	health := map[string]interface{}{
 		"status":    "healthy",
 		"timestamp": time.Now().UTC(),
-		"version":   s.appConfig.Version,
+		"version":   appVersion,
 	}
 
 	if startTime, ok := s.ctx.Value(startTimeKey).(time.Time); ok {
@@ -820,6 +825,10 @@ func (s *Server) handleListSkillTools(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := s.getConfig()
+	if cfg == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "no configuration available", nil)
+		return
+	}
 	redacted := redactConfig(cfg)
 	s.respondJSON(w, http.StatusOK, redacted)
 }

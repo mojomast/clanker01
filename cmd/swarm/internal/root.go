@@ -27,7 +27,10 @@ roles to complete software engineering work.`,
 		// Try to load a previously saved connection on startup so that
 		// subsequent commands can communicate with the remote server
 		// without requiring an explicit 'connect' each time.
-		if conn, err := LoadConnection(); err == nil && conn != nil {
+		conn, err := LoadConnection()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not load saved connection: %v\n", err)
+		} else if conn != nil {
 			SetConnection(conn)
 		}
 		return nil
@@ -44,6 +47,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	rootCmd.AddCommand(newConnectCmd())
+	rootCmd.AddCommand(newServeCmd())
 	rootCmd.AddCommand(newAgentCmd())
 	rootCmd.AddCommand(newSkillCmd())
 	rootCmd.AddCommand(newVersionCmd())

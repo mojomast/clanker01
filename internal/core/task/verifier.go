@@ -48,6 +48,14 @@ func NewVerifier(schemaValidator *SchemaValidator, customCheckers map[string]Cus
 }
 
 func (v *Verifier) Verify(ctx context.Context, task *Task) *VerificationResult {
+	if task == nil {
+		return &VerificationResult{
+			CheckedAt: time.Now(),
+			Valid:     false,
+			Error:     "task is nil",
+		}
+	}
+
 	result := &VerificationResult{
 		TaskID:    task.ID,
 		CheckedAt: time.Now(),
@@ -285,7 +293,10 @@ func (s *SchemaValidator) validateObject(schema map[string]any, data any) error 
 	properties, _ := schema["properties"].(map[string]any)
 
 	for _, r := range required {
-		req := r.(string)
+		req, ok := r.(string)
+		if !ok {
+			continue
+		}
 		if _, exists := obj[req]; !exists {
 			return fmt.Errorf("missing required field: %s", req)
 		}

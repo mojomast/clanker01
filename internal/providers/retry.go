@@ -27,13 +27,6 @@ var DefaultRetryConfig = RetryConfig{
 	},
 }
 
-// metricsRecorder is an interface for providers that can record metrics.
-// This allows RetryableProvider to record metrics on any provider that
-// embeds BaseProvider or otherwise implements recordMetrics.
-type metricsRecorder interface {
-	recordMetrics(usage *api.Usage, latencyMs float64, err error)
-}
-
 type RetryableProvider struct {
 	provider api.LLMProvider
 	config   RetryConfig
@@ -50,20 +43,16 @@ func (p *RetryableProvider) Models() []api.ModelInfo {
 func (p *RetryableProvider) Chat(ctx context.Context, req *api.ChatRequest) (*api.ChatResponse, error) {
 	var lastErr error
 	delay := p.config.InitialDelay
+	maxAttempts := p.config.MaxAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
 
-	for attempt := 1; attempt <= p.config.MaxAttempts; attempt++ {
-		start := time.Now()
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		resp, err := p.provider.Chat(ctx, req)
-		latency := time.Since(start).Milliseconds()
 
 		if err == nil {
-			if recorder, ok := p.provider.(metricsRecorder); ok {
-				var usage *api.Usage
-				if resp != nil {
-					usage = &resp.Usage
-				}
-				recorder.recordMetrics(usage, float64(latency), nil)
-			}
+			// Metrics are already recorded by the underlying provider
 			return resp, nil
 		}
 
@@ -72,17 +61,13 @@ func (p *RetryableProvider) Chat(ctx context.Context, req *api.ChatRequest) (*ap
 			return nil, err
 		}
 
-		if recorder, ok := p.provider.(metricsRecorder); ok {
-			recorder.recordMetrics(nil, float64(latency), err)
-		}
-
 		lastErr = err
 
 		if pErr.RetryAfter > 0 {
 			delay = pErr.RetryAfter
 		}
 
-		if attempt < p.config.MaxAttempts {
+		if attempt < maxAttempts {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -102,8 +87,12 @@ func (p *RetryableProvider) Chat(ctx context.Context, req *api.ChatRequest) (*ap
 func (p *RetryableProvider) StreamChat(ctx context.Context, req *api.ChatRequest) (<-chan api.ChatStreamEvent, error) {
 	var lastErr error
 	delay := p.config.InitialDelay
+	maxAttempts := p.config.MaxAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
 
-	for attempt := 1; attempt <= p.config.MaxAttempts; attempt++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		ch, err := p.provider.StreamChat(ctx, req)
 		if err == nil {
 			return ch, nil
@@ -120,7 +109,7 @@ func (p *RetryableProvider) StreamChat(ctx context.Context, req *api.ChatRequest
 			delay = pErr.RetryAfter
 		}
 
-		if attempt < p.config.MaxAttempts {
+		if attempt < maxAttempts {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()

@@ -173,11 +173,13 @@ func (o *Orchestrator) SubmitTask(ctx context.Context, t *api.Task) error {
 	}
 
 	// If the task is complex, decompose it via the planner and submit subtasks.
-	if o.shouldPlan(t) {
+	// Don't plan subtasks — only top-level tasks should be decomposed.
+	// Subtasks always have ParentID set, so this prevents infinite recursion.
+	if o.shouldPlan(t) && t.ParentID == "" {
 		subtasks, err := o.planTask(ctx, t)
 		if err == nil && len(subtasks) > 1 {
-			// Mark the parent as completed (it is now represented by subtasks).
-			t.Status = api.TaskStatusCompleted
+			// Mark the parent as blocked until its subtasks complete.
+			t.Status = api.TaskStatusBlocked
 			for _, st := range subtasks {
 				if err := o.SubmitTask(ctx, st); err != nil {
 					return fmt.Errorf("submit planned subtask %s: %w", st.ID, err)

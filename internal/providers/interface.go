@@ -47,6 +47,9 @@ func (p *BaseProvider) Models() []api.ModelInfo {
 
 // Configure configures the provider
 func (p *BaseProvider) Configure(config *api.ProviderConfig) error {
+	if config == nil {
+		return fmt.Errorf("%s: provider config must not be nil", p.name)
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.config = config
@@ -82,10 +85,13 @@ func (p *BaseProvider) SupportsAudio() bool {
 	return false
 }
 
-// MaxTokens returns the max tokens for a model
+// MaxTokens returns the max output tokens for a model
 func (p *BaseProvider) MaxTokens(model string) int {
 	for _, m := range p.models {
 		if m.ID == model || m.Alias == model {
+			if m.MaxOutputTokens > 0 {
+				return m.MaxOutputTokens
+			}
 			return m.MaxTokens
 		}
 	}

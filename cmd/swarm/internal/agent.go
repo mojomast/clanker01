@@ -205,8 +205,11 @@ func runAgentDelete(cmd *cobra.Command, args []string) error {
 		if apiErr := client.DeleteAgent(cmd.Context(), name); apiErr != nil {
 			return fmt.Errorf("failed to delete agent: %w", apiErr)
 		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Successfully deleted agent '%s'\n", name)
+		return nil
 	}
 
+	// Local mode fallback
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully deleted agent '%s'\n", name)
 
 	return nil
